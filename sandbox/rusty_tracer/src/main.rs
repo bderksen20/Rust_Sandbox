@@ -83,22 +83,29 @@ fn main() {
     let mut img_buffer: Vec<u8> = Vec::new();
     
     //-- progress bar
-    println!("Rendering...");
+    println!("\n\nRendering...");
     let pbar = ProgressBar::new(img_h.into());
     pbar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {bar:50.green/cyan} {msg} {percent}%").progress_chars("=>#"));
     
+    //-- light source
+    let bulb = Sphere{cen: Point{x:-5.0, y:5.0, z: -5.0}, r: 1.0, def_color: Color{r:255, g:255,b:255}};
+
     //-- launch rays
     //- launches left->right | top->bottom by step size (prop to img size)
     //NOTE: not factoring in camera focal length
     let mut cool_ray = Ray{origin: cam.pos, dir: Vec3{x: -0.5 * cam.w, y: 0.5 * cam.h, z: 1.0}};
     for y in 0..img_h {
         for x in 0..img_w {
+            match s1.hits(&cool_ray) {
+                Some(hit_rec) => {
+                    let color = phong_single_src(&hit_rec, &cam, &bulb);
+                    img_buffer.push(color.r); img_buffer.push(color.g); img_buffer.push(color.b); 
+                }
 
-            let hit_rec = s1.hits(&cool_ray);  // calc hit
-            if hit_rec.is_none() {  //miss
-                img_buffer.push(155); img_buffer.push(255); img_buffer.push(255);      
-            } else {  //hit
-                img_buffer.push(s1.def_color.r); img_buffer.push(s1.def_color.g); img_buffer.push(s1.def_color.b); 
+                None => {
+                    img_buffer.push(155); img_buffer.push(255); img_buffer.push(255);
+                }
+                   
             }
 
             cool_ray.dir.x += step;
@@ -120,6 +127,15 @@ fn main() {
 }
 
 // <<<<<<<<<<<<<<<<<<<<  HELPER TRAITS, STRUCTS, IMPLS, ETC. >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+//---- Phong Shading
+fn phong_single_src(hit_rec: &HitInfo, cam: &Camera, light: &Sphere) -> Color{
+    let n: Vec3 = hit_rec.norm.unit();                  //- normalized normal
+    let lv: Vec3 = hit_rec.ip - light.cen;              //- light -> hit pt
+    let rv: Vec3 = lv - 2.0 * (lv.dot(n)).cross(n);     //- perfect light reflection at hit pt
+    let cv: Vec3 = cam.pos - hit_rec.ip;                //- hit pt -> camera "eye
+    Color{r:0,g:0,b:0}
+}
 
 //---- Stringable: Implemented by objects to get description
 trait Stringable{
@@ -158,8 +174,16 @@ impl Point{
       (&self.x.powi(2) + &self.y.powi(2) + &self.z.powi(2)).abs()
     }
 
+    fn unit(&self) -> Vec3{
+       *self *  (1.0 / &self.mag())
+    }
+
     fn dot(&self, vec: Vec3) -> f64{
         (&self.x * &vec.x + &self.y * &vec.y + &self.z * &vec.z)
+    }
+
+    fn cross(&self, vec: Vec3) -> Vec3{
+        Vec3{x: (&self.y * vec.z) - (&self.z * vec.y), y: (&self.x * vec.z) - (&self.z * vec.x) , z: (&self.x * vec.y) - (&self.y * vec.x) }
     }
 
 } impl Stringable for Point {
@@ -248,13 +272,13 @@ struct Sphere{
     }
 }
 
-//---- Hit Info
+//---- Hit Info -----
 struct HitInfo{ 
     ip: Point,
     norm: Vec3
 }
 
-//---- Camera:
+//---- Camera ----
 struct Camera{
     pos: Point,
     focl: f64,
@@ -271,10 +295,4 @@ struct Camera{
         return String::from("position: ".to_owned() + &self.pos.stringy() + ", w = " + &self.w.to_string() + ", h = "+ &self.h.to_string()); 
     }
 }
-
-
-
-
-
-
 
