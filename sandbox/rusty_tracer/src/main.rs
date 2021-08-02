@@ -5,6 +5,17 @@
  */
 
 use std::ops;
+use std::path::Path;
+use std::fs::File;
+use std::io::BufWriter;
+use std::vec::Vec;
+use std::convert::TryInto;
+
+//TODO:
+//-- 
+//-- 1. Implement "Display" trait for easier printing? Over / with stringable?
+//--
+//--
 
 fn main() {
 
@@ -32,13 +43,61 @@ fn main() {
     println!("\n'no drop' test: x = {}, y = {}", v1.stringy(), v2.stringy());
     
     //-- TEST: Ray operations and intersection 
-    
+    let r1 = Ray{origin: Point::new(), dir: Vec3{x:0.0, y:0.0, z:1.0}};   
+    let s1 = Sphere{cen: Point{x:0.0, y:0.0, z:0.0}, r: 4.0};
+    println!("Discriminant test: {}", s1.hits(&r1));
 
     //-- camera
+    let cam = Camera::new();
+    let step: f64 = cam.w / (img_w as f64);
+
+    println!("World step size: {}", step);
+
+    //-- file + png encoder/writer
+    let path = Path::new("output/image.png");
+    let file = File::create(path).unwrap();
+    let ref mut w = BufWriter::new(file);
+
+    let mut encoder = png::Encoder::new(w, img_w, img_h);
+    encoder.set_color(png::ColorType::RGB);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().unwrap();
+
+    //-- pixel buffer
+    //let img_buff_size: usize = (img_h * img_w * 3).try_into().unwrap();
+    //let mut img_buffer = vec![0; img_buff_size];
+    let mut img_buffer: Vec<u8> = Vec::new();
+
+    //-- launch rays
+    //NOTE: not factoring in camera focal length
+    let mut cool_ray = Ray{origin: cam.pos, dir: Vec3{x: -0.5 * cam.w, y: 0.5 * cam.h, z: 20.0}};
     
-    //-- trace
-    
+    for y in 0..img_h {
+
+        for x in 0..img_w {
+            //println!("Ray dir: {}", cool_ray.dir.stringy());
+            if s1.hits(&cool_ray){
+                //println!("HIT");
+                img_buffer.push(0); img_buffer.push(0); img_buffer.push(255);       
+            } else {
+                img_buffer.push(155); img_buffer.push(255); img_buffer.push(255);
+            }
+
+            cool_ray.dir.x += step;
+            //println!("PX: {}, {}", x, y);
+        }
+        
+        cool_ray.dir.x = 0.0;
+        cool_ray.dir.y += step;
+    }
+
+    //-- write buff to png
+    let d: &[u8] = &img_buffer;
+    //let d = &img_buffer[..];
+    writer.write_image_data(d).unwrap();
+
 }
+
 
 //---- Stringable: Implemented by objects to get description
 trait Stringable{
@@ -62,7 +121,11 @@ struct Point{
 } use Point as Vec3;
 
 impl Point{
-    
+
+    pub fn new() -> Point{
+        Point{ x:0.0, y:0.0, z:0.0}
+    }
+
     fn mag(&self) -> f64{
       (&self.x.powi(2) + &self.y.powi(2) + &self.z.powi(2)).abs()
     }
@@ -117,7 +180,6 @@ impl ops::Neg for Vec3 {
     }
 }
 
-
 //---- Ray: follows formula P(t) = O + td
 struct Ray{
     origin: Point,
@@ -125,13 +187,44 @@ struct Ray{
     dir: Vec3
 }
 
+
 //---- Sphere: follows eq (x-h)^2 + (y-i)^2 + (z-j)^2 = R^2
 //-- vector form: ||x - c||^2 = R^2
 struct Sphere{
     cen: Point,
-    r: i32
+    r: f64
 }
 
+//-- Ray xXx Sphere: ||x - c||^2 = R^2, solve for t where x = P(t) 
+impl Hittable for Sphere{
+    fn hits(&self, ray: &Ray) -> bool{
+        let discrim = (2.0 * ray.dir.dot(ray.origin - self.cen)).powi(2) - (4.0 * ray.dir.mag().powi(2)) * ((ray.origin - self.cen).mag() - self.r.powi(2));
+
+        if discrim >= 0.0 {
+            true
+        } else {
+            false
+        }
+        //println!("Discrim: {}",discrim);
+
+    }
+}
+
+
+//---- Camera:
+struct Camera{
+    pos: Point,
+    focl: f64,
+    w: f64,
+    h: f64
+}
+
+impl Camera{
+
+    pub fn new() -> Camera{
+        Camera{ pos: Point{x:0.0, y:0.0, z: -5.0}, focl: 1.0, w: 16.0, h: 9.0 }
+    }
+}
 
 
 
