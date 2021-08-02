@@ -5,6 +5,7 @@
  */
 
 use std::ops;
+use std::option;
 use std::path::Path;
 use std::fs::File;
 use std::io::BufWriter;
@@ -46,7 +47,7 @@ fn main() {
     println!("\n   -x = {}", (-v1).stringy());
     println!("x + y = {}", (v1 + v2).stringy());
     println!("x - y = {}", (v1 - v2).stringy());
-    println!("x * y = {}", (v1 * v2).stringy());
+    println!("x * 2.0 = {}", (v1 * 2.0).stringy());
     println!("x · y = {}", v1.dot(v2)); 
     println!("||x|| = {}", v1.mag());
     println!("\n'no drop' test: x = {}, y = {}", v1.stringy(), v2.stringy());
@@ -58,15 +59,15 @@ fn main() {
     println!("\n\nRay Operations and Sphere Hit Test...\n-------------------------------------");
     println!("Sphere: {}", s1.stringy());
     println!("\n2x hit ray: {}", r1.stringy());
-    println!("Discriminant test: {}", s1.hits(&r1));
+    //println!("hit? : {}", s1.hits(&r1));
 
     r1.origin.x = -2.0;
     println!("\n1x hit ray: {}", r1.stringy());
-    println!("Discriminant test: {}", s1.hits(&r1));
+    //println!("Discriminant test: {}", s1.hits(&r1));
 
     r1.origin.x = -2.1;
     println!("\nmiss ray: {}", r1.stringy());
-    println!("Discriminant test: {}", s1.hits(&r1));
+    //println!("Discriminant test: {}", s1.hits(&r1));
 
     //-- file + png encoder/writer
     let path = Path::new("output/image.png");
@@ -92,16 +93,12 @@ fn main() {
     let mut cool_ray = Ray{origin: cam.pos, dir: Vec3{x: -0.5 * cam.w, y: 0.5 * cam.h, z: 1.0}};
     for y in 0..img_h {
         for x in 0..img_w {
-            
-            //if cool_ray.dir.x <= 1.0 && cool_ray.dir.y <= 1.0{
-            //    println!("\nray: {}", cool_ray.stringy());
-            //    println!("Discriminant test: {}", s1.hits(&cool_ray));
-            //}
 
-            if s1.hits(&cool_ray){
-                img_buffer.push(s1.def_color.r); img_buffer.push(s1.def_color.g); img_buffer.push(s1.def_color.b);       
-            } else {
-                img_buffer.push(155); img_buffer.push(255); img_buffer.push(255);
+            let hit_rec = s1.hits(&cool_ray);  // calc hit
+            if hit_rec.is_none() {  //miss
+                img_buffer.push(155); img_buffer.push(255); img_buffer.push(255);      
+            } else {  //hit
+                img_buffer.push(s1.def_color.r); img_buffer.push(s1.def_color.g); img_buffer.push(s1.def_color.b); 
             }
 
             cool_ray.dir.x += step;
@@ -122,6 +119,7 @@ fn main() {
 
 }
 
+// <<<<<<<<<<<<<<<<<<<<  HELPER TRAITS, STRUCTS, IMPLS, ETC. >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 //---- Stringable: Implemented by objects to get description
 trait Stringable{
@@ -130,7 +128,7 @@ trait Stringable{
 
 //---- Hittable: Implemented by any geometry
 trait Hittable{
-    fn hits(&self, ray: &Ray) -> bool;
+    fn hits(&self, ray: &Ray) -> Option<HitInfo>;
 }
 
 //---- Color
@@ -163,46 +161,34 @@ impl Point{
     fn dot(&self, vec: Vec3) -> f64{
         (&self.x * &vec.x + &self.y * &vec.y + &self.z * &vec.z)
     }
-}
 
-//-- .stringy impl
-impl Stringable for Point {
+} impl Stringable for Point {
     fn stringy(&self) -> String{
         return String::from("<".to_owned() + &self.x.to_string() + ", "+ &self.y.to_string() + ", "+ &self.z.to_string() + ">");  
     }
-}
 
-//-- Add + overload
-//- NOTE: to use x + y over reference, needed to implement Copy & Clone for struct... are refs to
-//member data ok???
-impl ops::Add for Vec3 {
+} impl ops::Add for Vec3 {            //-- Add overload
     type Output = Vec3;
 
     fn add(self, vec: Vec3) -> Vec3 {
         Vec3 { x: &self.x + &vec.x, y: &self.y + &vec.y, z: &self.z + &vec.z }
     }
-}
 
-//-- Sub - overload
-impl ops::Sub for Vec3 {
+} impl ops::Sub for Vec3 {          //-- Sub - overload
     type Output = Vec3;
 
     fn sub(self, vec: Vec3) -> Vec3 {
         Vec3 { x: &self.x - &vec.x, y: &self.y - &vec.y, z: &self.z - &vec.z }
     }
-}
 
-//-- Mul * overload
-impl ops::Mul for Vec3 {
+} impl ops::Mul<f64> for Vec3 {     //-- SCALAR Mult * overload
     type Output = Vec3;
 
-    fn mul(self, vec: Vec3) -> Vec3 {
-        Vec3 { x: &self.x * &vec.x, y: &self.y * &vec.y, z: &self.z * &vec.z }
+    fn mul(self, s: f64) -> Vec3 {
+        Vec3 { x: &self.x * s, y: &self.y * s, z: &self.z * s }
     }
-}
 
-//-- Neg -x overload
-impl ops::Neg for Vec3 {
+} impl ops::Neg for Vec3 {          //-- Neg -x overload
     type Output = Vec3;
 
     fn neg(self) -> Vec3 {
@@ -213,11 +199,16 @@ impl ops::Neg for Vec3 {
 //---- Ray: follows formula P(t) = O + td
 struct Ray{
     origin: Point,
-    //t: i32,
     dir: Vec3
-}
 
-impl Stringable for Ray{
+} impl Ray{
+
+    pub fn at(&self, t: f64) -> Point{
+        let p = self.origin - ( self.dir * t);
+        return p;
+    }
+
+} impl Stringable for Ray{
     fn stringy(&self) -> String{
         return String::from("P(t) = ".to_owned() + &self.origin.stringy() + " + t" + &self.dir.stringy());
     }
@@ -229,28 +220,39 @@ struct Sphere{
     cen: Point,
     r: f64,
     def_color: Color
-}
 
-impl Stringable for Sphere{
+} impl Stringable for Sphere{
+
     fn stringy(&self) -> String{
         return String::from("center = ".to_owned() + &self.cen.stringy() + ", r = " + &self.r.to_string());
     }
-}
-//-- Ray xXx Sphere: ||x - c||^2 = R^2, solve for t where x = P(t) 
-impl Hittable for Sphere{
-    fn hits(&self, ray: &Ray) -> bool{
+
+} impl Hittable for Sphere{     //-- Ray xXx Sphere: ||x - c||^2 = R^2, solve for t where x = P(t) 
+
+    fn hits(&self, ray: &Ray) -> Option<HitInfo>{
         let discrim = (2.0 * ray.dir.dot(ray.origin - self.cen)).powi(2) - (4.0 * ray.dir.mag().powi(2)) * ((ray.origin - self.cen).mag() - self.r.powi(2));
+        
+        if discrim < 0.01 && discrim > 0.0 {                                            //-- 1x hit handling
 
-        if discrim >= 0.0 {
-            true
-        } else {
-            false
+            let t = -(ray.dir.dot(ray.origin - self.cen)) / ray.dir.mag().powi(2);          //- solve for t
+            Some(HitInfo{ip: ray.at(t), norm: ray.at(t) - self.cen})                        //- solve for incident pt + norm
+
+        } else if discrim >= 0.01{                                                      //-- 2x hit handling
+                        
+            let t = (-2.0 * (ray.dir.dot(ray.origin - self.cen)) - discrim)  / (2.0 * ray.dir.mag().powi(2));   //- solve for t (want closer hit)
+            Some(HitInfo{ip: ray.at(t), norm: ray.at(t) - self.cen})                                            //- solve for incident pt + norm
+
+        } else {                //-- miss handling
+            None
         }
-        //println!("Discrim: {}",discrim);
-
     }
 }
 
+//---- Hit Info
+struct HitInfo{ 
+    ip: Point,
+    norm: Vec3
+}
 
 //---- Camera:
 struct Camera{
@@ -258,16 +260,13 @@ struct Camera{
     focl: f64,
     w: f64,
     h: f64
-}
-
-impl Camera{
+} impl Camera{
 
     pub fn new() -> Camera{
         Camera{ pos: Point{x:0.0, y:0.0, z: -5.0}, focl: 1.0, w: 16.0, h: 9.0 }
     }
-}
 
-impl Stringable for Camera{
+} impl Stringable for Camera{
     fn stringy(&self) -> String{
         return String::from("position: ".to_owned() + &self.pos.stringy() + ", w = " + &self.w.to_string() + ", h = "+ &self.h.to_string()); 
     }
