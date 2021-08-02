@@ -11,6 +11,9 @@ use std::io::BufWriter;
 use std::vec::Vec;
 use std::convert::TryInto;
 
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
+
 //TODO:
 //-- 
 //-- 1. Implement "Display" trait for easier printing? Over / with stringable?
@@ -19,20 +22,26 @@ use std::convert::TryInto;
 
 fn main() {
 
-    println!("Welcome to the rusty tracer........");
+    println!("\n----------------------------------\n|  Welcome to the rusty tracer!  |\n----------------------------------");
 
     //-- image
     let aspect_ratio: f32 = 16.0 / 9.0;
     let img_h: u32 = 1080;
     let img_w = (aspect_ratio * img_h as f32) as u32;
 
-    println!("- img set to {} x {}...", img_w, img_h);
+    //-- camera
+    let cam = Camera::new();
+    let step: f64 = cam.w / (img_w as f64);
 
+    println!("- img set to {} x {}", img_w, img_h);
+    println!("- camera: {}", cam.stringy());
+    println!("- world ray step size: {}", step);
+    
     let v1 = Vec3{x: 1.5, y: -2.5, z: 0.0};
     let v2 = Vec3{x: 0.5, y: 10.0, z: 2.2};
     
     //-- TEST: printing and operator overloads
-    println!("\nVec3 Operations Test...\n------------------------------------\nx = {}", v1.stringy());
+    println!("\n\nVec3 Operations Test...\n------------------------------------\nx = {}", v1.stringy());
     println!("y = {}", v2.stringy());
     println!("\n   -x = {}", (-v1).stringy());
     println!("x + y = {}", (v1 + v2).stringy());
@@ -42,16 +51,22 @@ fn main() {
     println!("||x|| = {}", v1.mag());
     println!("\n'no drop' test: x = {}, y = {}", v1.stringy(), v2.stringy());
     
-    //-- TEST: Ray operations and intersection 
-    let r1 = Ray{origin: Point::new(), dir: Vec3{x:0.0, y:0.0, z:1.0}};   
-    let s1 = Sphere{cen: Point{x:0.0, y:0.0, z:0.0}, r: 4.0};
+    //-- TEST: Ray operations and intersection
+    let mut r1 = Ray{origin: Point{x:0.0,y:0.0,z:-5.0}, dir: Vec3{x:0.0, y:0.0, z:1.0}};   
+    let s1 = Sphere{cen: Point{x:0.0, y:0.0, z:0.0}, r: 4.0, def_color: Color{r:0,g:0,b:255}};
+
+    println!("\n\nRay Operations and Sphere Hit Test...\n-------------------------------------");
+    println!("Sphere: {}", s1.stringy());
+    println!("\n2x hit ray: {}", r1.stringy());
     println!("Discriminant test: {}", s1.hits(&r1));
 
-    //-- camera
-    let cam = Camera::new();
-    let step: f64 = cam.w / (img_w as f64);
+    r1.origin.x = -2.0;
+    println!("\n1x hit ray: {}", r1.stringy());
+    println!("Discriminant test: {}", s1.hits(&r1));
 
-    println!("World step size: {}", step);
+    r1.origin.x = -2.1;
+    println!("\nmiss ray: {}", r1.stringy());
+    println!("Discriminant test: {}", s1.hits(&r1));
 
     //-- file + png encoder/writer
     let path = Path::new("output/image.png");
@@ -64,36 +79,45 @@ fn main() {
     let mut writer = encoder.write_header().unwrap();
 
     //-- pixel buffer
-    //let img_buff_size: usize = (img_h * img_w * 3).try_into().unwrap();
-    //let mut img_buffer = vec![0; img_buff_size];
     let mut img_buffer: Vec<u8> = Vec::new();
-
-    //-- launch rays
-    //NOTE: not factoring in camera focal length
-    let mut cool_ray = Ray{origin: cam.pos, dir: Vec3{x: -0.5 * cam.w, y: 0.5 * cam.h, z: 20.0}};
     
+    //-- progress bar
+    println!("Rendering...");
+    let pbar = ProgressBar::new(img_h.into());
+    pbar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {bar:50.green/cyan} {msg} {percent}%").progress_chars("=>#"));
+    
+    //-- launch rays
+    //- launches left->right | top->bottom by step size (prop to img size)
+    //NOTE: not factoring in camera focal length
+    let mut cool_ray = Ray{origin: cam.pos, dir: Vec3{x: -0.5 * cam.w, y: 0.5 * cam.h, z: 1.0}};
     for y in 0..img_h {
-
         for x in 0..img_w {
-            //println!("Ray dir: {}", cool_ray.dir.stringy());
+            
+            //if cool_ray.dir.x <= 1.0 && cool_ray.dir.y <= 1.0{
+            //    println!("\nray: {}", cool_ray.stringy());
+            //    println!("Discriminant test: {}", s1.hits(&cool_ray));
+            //}
+
             if s1.hits(&cool_ray){
-                //println!("HIT");
-                img_buffer.push(0); img_buffer.push(0); img_buffer.push(255);       
+                img_buffer.push(s1.def_color.r); img_buffer.push(s1.def_color.g); img_buffer.push(s1.def_color.b);       
             } else {
                 img_buffer.push(155); img_buffer.push(255); img_buffer.push(255);
             }
 
             cool_ray.dir.x += step;
-            //println!("PX: {}, {}", x, y);
         }
         
-        cool_ray.dir.x = 0.0;
-        cool_ray.dir.y += step;
+        cool_ray.dir.x = -0.5 * cam.w;
+        cool_ray.dir.y -= step;
+
+        pbar.inc(1);
     }
 
-    //-- write buff to png
+    //-- cleanup
+    pbar.finish();
+
+    //-- convert buff and write to png
     let d: &[u8] = &img_buffer;
-    //let d = &img_buffer[..];
     writer.write_image_data(d).unwrap();
 
 }
@@ -109,15 +133,21 @@ trait Hittable{
     fn hits(&self, ray: &Ray) -> bool;
 }
 
-//---- Linear Algebra Structs + Functions
+//---- Color
+#[derive(Copy, Clone)]
+struct Color{
+    r: u8,
+    g: u8,
+    b: u8
+}
 
+//---- Linear Algebra Structs + Functions
 //--- Point/Vec3 Struct + Imp
 #[derive(Copy, Clone)]
 struct Point{
     x: f64,
     y: f64,
     z: f64
-
 } use Point as Vec3;
 
 impl Point{
@@ -138,7 +168,7 @@ impl Point{
 //-- .stringy impl
 impl Stringable for Point {
     fn stringy(&self) -> String{
-        return String::from("< ".to_owned() + &self.x.to_string() + ", "+ &self.y.to_string() + ", "+ &self.z.to_string() + " >");  
+        return String::from("<".to_owned() + &self.x.to_string() + ", "+ &self.y.to_string() + ", "+ &self.z.to_string() + ">");  
     }
 }
 
@@ -187,14 +217,25 @@ struct Ray{
     dir: Vec3
 }
 
+impl Stringable for Ray{
+    fn stringy(&self) -> String{
+        return String::from("P(t) = ".to_owned() + &self.origin.stringy() + " + t" + &self.dir.stringy());
+    }
+}
 
 //---- Sphere: follows eq (x-h)^2 + (y-i)^2 + (z-j)^2 = R^2
 //-- vector form: ||x - c||^2 = R^2
 struct Sphere{
     cen: Point,
-    r: f64
+    r: f64,
+    def_color: Color
 }
 
+impl Stringable for Sphere{
+    fn stringy(&self) -> String{
+        return String::from("center = ".to_owned() + &self.cen.stringy() + ", r = " + &self.r.to_string());
+    }
+}
 //-- Ray xXx Sphere: ||x - c||^2 = R^2, solve for t where x = P(t) 
 impl Hittable for Sphere{
     fn hits(&self, ray: &Ray) -> bool{
@@ -226,6 +267,11 @@ impl Camera{
     }
 }
 
+impl Stringable for Camera{
+    fn stringy(&self) -> String{
+        return String::from("position: ".to_owned() + &self.pos.stringy() + ", w = " + &self.w.to_string() + ", h = "+ &self.h.to_string()); 
+    }
+}
 
 
 
