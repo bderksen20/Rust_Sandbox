@@ -132,7 +132,7 @@ fn main() {
 fn phong_single_src(hit_rec: &HitInfo, cam: &Camera, light: &Sphere) -> Color{
     let n: Vec3 = hit_rec.norm.unit();                  //- normalized normal
     let lv: Vec3 = hit_rec.ip - light.cen;              //- light -> hit pt
-    let rv: Vec3 = lv - 2.0 * (lv.dot(n)).cross(n);     //- perfect light reflection at hit pt
+    let rv: Vec3 = lv - n * (lv.dot(n)) * 2.0;          //- perfect light reflection at hit pt
     let cv: Vec3 = cam.pos - hit_rec.ip;                //- hit pt -> camera "eye
     Color{r:0,g:0,b:0}
 }
