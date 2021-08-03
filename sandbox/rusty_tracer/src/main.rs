@@ -56,7 +56,8 @@ fn main() {
     //-- TEST: Ray operations and intersection
     let mut r1 = Ray{origin: Point{x:0.0,y:0.0,z:-5.0}, dir: Vec3{x:0.0, y:0.0, z:1.0}};   
     let s1 = Sphere{cen: Point{x:0.0, y:0.0, z:0.0}, r: 4.0, def_color: Point{x: 0.2, y: 0.2, z: 0.6}};
-
+    let s2 = Sphere{cen: Point{x:0.0, y:0.0, z:-4.0}, r: 0.5, def_color: Point{x: 0.6, y: 0.2, z: 0.2}};
+   
     println!("\n\nRay Operations and Sphere Hit Test...\n-------------------------------------");
     println!("Sphere: {}", s1.stringy());
     println!("\n2x hit ray: {}", r1.stringy());
@@ -94,32 +95,46 @@ fn main() {
     //-- scene 
     let mut scene: Vec<&Sphere> = Vec::new();
     scene.push(&s1);
+    scene.push(&s2);
     //scene.push(&bulb);
 
     //-- launch rays
     //- launches left->right | top->bottom by step size (prop to img size)
     //NOTE: not factoring in camera focal length
     let mut cool_ray = Ray{origin: cam.pos, dir: Vec3{x: -0.5 * cam.w, y: 0.5 * cam.h, z: 1.0}};
-    //cool_ray.dir = cool_ray.dir.unit();
-
+    let mut closest_hit: HitInfo = HitInfo{ip: Point::default(), norm: Point::default(), obj: &s1};     //-- dummy init to avoid compile errors  
     for y in 0..img_h {
         for x in 0..img_w {
-            for obj in &scene{
-                //println!("Fired ray: {}", cool_ray.stringy());
-                match obj.hits(&cool_ray) {
+            
+            let mut first_hit: bool = true;
+            let mut color: Color = Color::default();
+
+            for obj in &scene{                          //-- for each object in scene....
+                match obj.hits(&cool_ray) {             //- check for a hit
                 Some(hit_rec) => {
 
-                    let color = phong_single_src(&hit_rec, &cam, &bulb);
-                    img_buffer.push(color.r); img_buffer.push(color.g); img_buffer.push(color.b); 
+                    if first_hit {                      //- if first hit for this ray, init hit ptr
+                        first_hit = false;
+                        closest_hit = hit_rec;
+                    } else {                            //- if not, determine closer hit to cam and set
+                        if (hit_rec.ip - cam.pos).mag() < (closest_hit.ip - cam.pos).mag() {
+                            closest_hit = hit_rec;
+                        }
+                    }
+
+                    color = phong_single_src(&hit_rec, &cam, &bulb);
+                    //img_buffer.push(color.r); img_buffer.push(color.g); img_buffer.push(color.b); 
                 }
 
                 None => {
-                    img_buffer.push(0); img_buffer.push(0); img_buffer.push(0);
+                    //img_buffer.push(0); img_buffer.push(0); img_buffer.push(0);
                 }
                    
                 }
             }
-           
+
+            //--write color to buffer
+            img_buffer.push(color.r); img_buffer.push(color.g); img_buffer.push(color.b);                
             cool_ray.dir.x += step;
         }
         
@@ -182,7 +197,7 @@ trait Hittable{
 }
 
 //---- Color
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 struct Color{
     r: u8,
     g: u8,
@@ -191,7 +206,7 @@ struct Color{
 
 //---- Linear Algebra Structs + Functions
 //--- Point/Vec3 Struct + Imp
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 struct Point{
     x: f64,
     y: f64,
@@ -283,6 +298,7 @@ struct Ray{
 
 //---- Sphere: follows eq (x-h)^2 + (y-i)^2 + (z-j)^2 = R^2
 //-- vector form: ||x - c||^2 = R^2
+#[derive(Default)]
 struct Sphere{
     cen: Point,
     r: f64,
@@ -322,6 +338,7 @@ struct Sphere{
 }
 
 //---- Hit Info -----
+#[derive(Copy, Clone)]
 struct HitInfo<'a>{ 
     ip: Point,
     norm: Vec3,
