@@ -54,7 +54,7 @@ fn main() {
     
     //-- TEST: Ray operations and intersection
     let mut r1 = Ray{origin: Point{x:0.0,y:0.0,z:-5.0}, dir: Vec3{x:0.0, y:0.0, z:1.0}};   
-    let s1 = Sphere{cen: Point{x:0.0, y:0.0, z:0.0}, r: 4.0, def_color: Color{r:0,g:0,b:255}};
+    let s1 = Sphere{cen: Point{x:0.0, y:0.0, z:0.0}, r: 4.9, def_color: Color{r:0,g:0,b:255}};
 
     println!("\n\nRay Operations and Sphere Hit Test...\n-------------------------------------");
     println!("Sphere: {}", s1.stringy());
@@ -85,7 +85,7 @@ fn main() {
     //-- progress bar
     println!("\n\nRendering...");
     let pbar = ProgressBar::new(img_h.into());
-    pbar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {bar:50.green/cyan} {msg} {percent}%").progress_chars("=>#"));
+    pbar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] [{bar:50.green/cyan}] {msg} {percent}%").progress_chars("=>#"));
     
     //-- light source
     let bulb = Sphere{cen: Point{x:-5.0, y:5.0, z: -5.0}, r: 1.0, def_color: Color{r:255, g:255,b:255}};
@@ -103,7 +103,7 @@ fn main() {
                 }
 
                 None => {
-                    img_buffer.push(155); img_buffer.push(255); img_buffer.push(255);
+                    img_buffer.push(0); img_buffer.push(0); img_buffer.push(0);
                 }
                    
             }
@@ -131,10 +131,29 @@ fn main() {
 //---- Phong Shading
 fn phong_single_src(hit_rec: &HitInfo, cam: &Camera, light: &Sphere) -> Color{
     let n: Vec3 = hit_rec.norm.unit();                  //- normalized normal
-    let lv: Vec3 = hit_rec.ip - light.cen;              //- light -> hit pt
-    let rv: Vec3 = lv - n * (lv.dot(n)) * 2.0;          //- perfect light reflection at hit pt
-    let cv: Vec3 = cam.pos - hit_rec.ip;                //- hit pt -> camera "eye
-    Color{r:0,g:0,b:0}
+    let lv: Vec3 = (light.cen - hit_rec.ip).unit();     //- hit pt -> light
+    let rv: Vec3 = n * (lv.dot(n)) * 2.0 - lv;          //- perfect light reflection at hit pt
+    let cv: Vec3 = (cam.pos - hit_rec.ip).unit();       //- hit pt -> camera "eye"
+
+    let basecolor = Point{x: 0.1, y: 0.1, z: 0.6};
+
+    let ia = Point{x:1.0 , y: 1.0, z: 1.0};    // actually colors but need floats
+    let id = Point{x:1.0 , y: 1.0, z: 1.0};
+    let is = Point{x:1.0 , y: 1.0, z: 1.0};
+
+    //let ia = testcol; let id = testcol; let is = testcol;
+    let ka = 0.1;
+    let kd = 0.4;
+    let ks = 0.5;
+
+    let alpha = 100.0;
+
+    //-- ambient + diffuse + specular light 
+    let illu: Vec3 = ka * ia + (kd * (lv.dot(n)) * id) + (ks * (rv.dot(rv).powf(alpha) * is)) + basecolor;
+
+    //println!("Phong illumination: {}", illu.stringy());
+
+    Color{r: (illu.x * 255.0) as u8 ,g: (illu.y * 255.0) as u8 , b: (illu.z * 255.0) as u8}
 }
 
 //---- Stringable: Implemented by objects to get description
@@ -217,6 +236,14 @@ impl Point{
 
     fn neg(self) -> Vec3 {
         Vec3 { x: -&self.x, y: -&self.y, z: -&self.z}
+    }
+}
+
+impl ops::Mul<Vec3> for f64{
+    type Output = Vec3;
+
+    fn mul(self, vec: Vec3) -> Vec3{
+        Vec3 { x: self * vec.x, y: self * vec.y, z: self * vec.z}
     }
 }
 
