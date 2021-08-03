@@ -3,7 +3,7 @@ repo for Rust learning, examples, projects, and practice
 
 ## Projects: 
 ### rusty_tracer:
-*rust-based ray tracer*
+*a rust-based ray tracer implemented (mostly) from scratch by... me!*
 
-- current iteration preview:
+- current iteration preview: ray-traced sphere with Phong illumination model
 ![Phong Illumination Model](./sandbox/rusty_tracer/output/image.png)
