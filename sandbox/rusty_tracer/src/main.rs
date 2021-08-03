@@ -11,6 +11,7 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::vec::Vec;
 use std::convert::TryInto;
+use std::process;
 
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
@@ -54,7 +55,7 @@ fn main() {
     
     //-- TEST: Ray operations and intersection
     let mut r1 = Ray{origin: Point{x:0.0,y:0.0,z:-5.0}, dir: Vec3{x:0.0, y:0.0, z:1.0}};   
-    let s1 = Sphere{cen: Point{x:0.0, y:0.0, z:0.0}, r: 4.9, def_color: Color{r:0,g:0,b:255}};
+    let s1 = Sphere{cen: Point{x:0.0, y:0.0, z:0.0}, r: 4.0, def_color: Point{x: 0.2, y: 0.2, z: 0.6}};
 
     println!("\n\nRay Operations and Sphere Hit Test...\n-------------------------------------");
     println!("Sphere: {}", s1.stringy());
@@ -88,16 +89,26 @@ fn main() {
     pbar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] [{bar:50.green/cyan}] {msg} {percent}%").progress_chars("=>#"));
     
     //-- light source
-    let bulb = Sphere{cen: Point{x:-5.0, y:5.0, z: -5.0}, r: 1.0, def_color: Color{r:255, g:255,b:255}};
+    let bulb = Sphere{cen: Point{x:-5.0, y:6.0, z: -5.0}, r: 1.0, def_color: Point{x: 1.0, y: 1.0, z: 1.0}};
+
+    //-- scene 
+    let mut scene: Vec<&Sphere> = Vec::new();
+    scene.push(&s1);
+    //scene.push(&bulb);
 
     //-- launch rays
     //- launches left->right | top->bottom by step size (prop to img size)
     //NOTE: not factoring in camera focal length
     let mut cool_ray = Ray{origin: cam.pos, dir: Vec3{x: -0.5 * cam.w, y: 0.5 * cam.h, z: 1.0}};
+    //cool_ray.dir = cool_ray.dir.unit();
+
     for y in 0..img_h {
         for x in 0..img_w {
-            match s1.hits(&cool_ray) {
+            for obj in &scene{
+                //println!("Fired ray: {}", cool_ray.stringy());
+                match obj.hits(&cool_ray) {
                 Some(hit_rec) => {
+
                     let color = phong_single_src(&hit_rec, &cam, &bulb);
                     img_buffer.push(color.r); img_buffer.push(color.g); img_buffer.push(color.b); 
                 }
@@ -106,8 +117,9 @@ fn main() {
                     img_buffer.push(0); img_buffer.push(0); img_buffer.push(0);
                 }
                    
+                }
             }
-
+           
             cool_ray.dir.x += step;
         }
         
@@ -128,31 +140,34 @@ fn main() {
 
 // <<<<<<<<<<<<<<<<<<<<  HELPER TRAITS, STRUCTS, IMPLS, ETC. >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-//---- Phong Shading
+//---- Phong Reflection / Shading Model
 fn phong_single_src(hit_rec: &HitInfo, cam: &Camera, light: &Sphere) -> Color{
+
+    //-- calculate vectors for Phong model comp
     let n: Vec3 = hit_rec.norm.unit();                  //- normalized normal
     let lv: Vec3 = (light.cen - hit_rec.ip).unit();     //- hit pt -> light
-    let rv: Vec3 = n * (lv.dot(n)) * 2.0 - lv;          //- perfect light reflection at hit pt
+    let rv: Vec3 = 2.0 * lv.dot(n) * n - lv;            //- perfect light reflection at hit pt
     let cv: Vec3 = (cam.pos - hit_rec.ip).unit();       //- hit pt -> camera "eye"
 
-    let basecolor = Point{x: 0.1, y: 0.1, z: 0.6};
-
-    let ia = Point{x:1.0 , y: 1.0, z: 1.0};    // actually colors but need floats
+    //-- respective light colors 
+    let ia = Point{x:1.0 , y: 1.0, z: 1.0};             //- actually colors, but need to use floats
     let id = Point{x:1.0 , y: 1.0, z: 1.0};
     let is = Point{x:1.0 , y: 1.0, z: 1.0};
 
-    //let ia = testcol; let id = testcol; let is = testcol;
-    let ka = 0.1;
+    //-- test material light constants
+    let ka = 0.05;
     let kd = 0.4;
     let ks = 0.5;
+    let alpha = 100.0;                                  //- "shininess" factor
+    
+    //-- Phong Light Model --> illumination at point = sum of ambient, diffuse, and specular light
+    let ambient = ka * ia;
+    let diffuse = (kd * (lv.dot(n)) * is);
+    let specular = (ks * (rv.dot(cv).clamp( 0.0, 1.0).powf(alpha) * is));           //-- NOTE: need to clamp dot product to prevent dual specular
 
-    let alpha = 100.0;
+    let illu = ambient + diffuse + specular + hit_rec.obj.def_color;                //-- sum lights + base color of hit object
 
-    //-- ambient + diffuse + specular light 
-    let illu: Vec3 = ka * ia + (kd * (lv.dot(n)) * id) + (ks * (rv.dot(rv).powf(alpha) * is)) + basecolor;
-
-    //println!("Phong illumination: {}", illu.stringy());
-
+    //-- normalize color to RGB 0-255 space and return
     Color{r: (illu.x * 255.0) as u8 ,g: (illu.y * 255.0) as u8 , b: (illu.z * 255.0) as u8}
 }
 
@@ -190,11 +205,11 @@ impl Point{
     }
 
     fn mag(&self) -> f64{
-      (&self.x.powi(2) + &self.y.powi(2) + &self.z.powi(2)).abs()
+      (&self.x.powf(2.0) + &self.y.powf(2.0) + &self.z.powf(2.0)).abs().sqrt()
     }
 
     fn unit(&self) -> Vec3{
-       *self *  (1.0 / &self.mag())
+       *self *  (1.0 / self.mag())
     }
 
     fn dot(&self, vec: Vec3) -> f64{
@@ -248,6 +263,7 @@ impl ops::Mul<Vec3> for f64{
 }
 
 //---- Ray: follows formula P(t) = O + td
+#[derive(Copy, Clone)]
 struct Ray{
     origin: Point,
     dir: Vec3
@@ -255,7 +271,7 @@ struct Ray{
 } impl Ray{
 
     pub fn at(&self, t: f64) -> Point{
-        let p = self.origin - ( self.dir * t);
+        let p = self.origin + ( self.dir * t);
         return p;
     }
 
@@ -270,7 +286,7 @@ struct Ray{
 struct Sphere{
     cen: Point,
     r: f64,
-    def_color: Color
+    def_color: Point
 
 } impl Stringable for Sphere{
 
@@ -280,18 +296,24 @@ struct Sphere{
 
 } impl Hittable for Sphere{     //-- Ray xXx Sphere: ||x - c||^2 = R^2, solve for t where x = P(t) 
 
-    fn hits(&self, ray: &Ray) -> Option<HitInfo>{
-        let discrim = (2.0 * ray.dir.dot(ray.origin - self.cen)).powi(2) - (4.0 * ray.dir.mag().powi(2)) * ((ray.origin - self.cen).mag() - self.r.powi(2));
+    fn hits(&self, r: &Ray) -> Option<HitInfo>{
+        let mut ray = *r;
+        ray.dir = ray.dir.unit();                   //-- NOTE: convert to unit vector for calculation... avoid extra comp?
         
-        if discrim < 0.01 && discrim > 0.0 {                                            //-- 1x hit handling
+        //println!("unit ray: {}", ray.stringy());
 
-            let t = -(ray.dir.dot(ray.origin - self.cen)) / ray.dir.mag().powi(2);          //- solve for t
-            Some(HitInfo{ip: ray.at(t), norm: ray.at(t) - self.cen})                        //- solve for incident pt + norm
+        let mut discrim = (2.0 * ray.dir.dot(ray.origin - self.cen)).powf(2.0) - (4.0 * ray.dir.mag().powf(2.0)) * ((ray.origin - self.cen).mag().powf(2.0) - self.r.powf(2.0));
+        
+        //println!("discriminant: {}", discrim);
+        if discrim < 0.01 && discrim > 0.0 {                                            //-- 1x hit handling
+        
+            let t = -(ray.dir.dot(ray.origin - self.cen)) / ray.dir.mag().powf(2.0);          //- solve for t
+            Some(HitInfo{ip: ray.at(t), norm: ray.at(t) - self.cen, obj: &self})                        //- solve for incident pt + norm
 
         } else if discrim >= 0.01{                                                      //-- 2x hit handling
-                        
-            let t = (-2.0 * (ray.dir.dot(ray.origin - self.cen)) - discrim)  / (2.0 * ray.dir.mag().powi(2));   //- solve for t (want closer hit)
-            Some(HitInfo{ip: ray.at(t), norm: ray.at(t) - self.cen})                                            //- solve for incident pt + norm
+    
+            let t = (-2.0 * (ray.dir.dot(ray.origin - self.cen)) - discrim.sqrt())  / (2.0 * ray.dir.mag().powf(2.0));   //- solve for t (want closer hit)
+            Some(HitInfo{ip: ray.at(t), norm: ray.at(t) - self.cen, obj: &self})                                            //- solve for incident pt + norm
 
         } else {                //-- miss handling
             None
@@ -300,9 +322,10 @@ struct Sphere{
 }
 
 //---- Hit Info -----
-struct HitInfo{ 
+struct HitInfo<'a>{ 
     ip: Point,
-    norm: Vec3
+    norm: Vec3,
+    obj: &'a Sphere
 }
 
 //---- Camera ----
