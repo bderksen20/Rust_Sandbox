@@ -16,11 +16,19 @@ use std::process;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 
-//TODO:
-//-- 
+//-- TODO For Need!
+//-- 0. Clean up!!! Make things more dynamically testable during runtime... 
 //-- 1. Implement "Display" trait for easier printing? Over / with stringable?
-//--
-//--
+//-- 2. Image is upside down! Whoops!
+//-- 3. Package Phong light instrinsics inside of light struct
+//-- 4. Add multi-light support
+//-- 5. "Generalize" object model, eg. put varied "Scene Object" geometry structs into single vec
+//-- 6. Upgrade to materials rather than just base color
+
+//-- TODO For Fun!
+//-- fun1. 3D fractals! fractals out of other geometry???
+//-- fun2. ascii render???
+//-- fun3. path tracer implementation
 
 fn main() {
 
@@ -55,9 +63,10 @@ fn main() {
     
     //-- TEST: Ray operations and intersection
     let mut r1 = Ray{origin: Point{x:0.0,y:0.0,z:-5.0}, dir: Vec3{x:0.0, y:0.0, z:1.0}};   
-    let s1 = Sphere{cen: Point{x:0.0, y:0.0, z:0.0}, r: 4.0, def_color: Point{x: 0.2, y: 0.2, z: 0.6}};
-    let s2 = Sphere{cen: Point{x:0.0, y:0.0, z:-4.0}, r: 0.5, def_color: Point{x: 0.6, y: 0.2, z: 0.2}};
-   
+    let s1 = Sphere{cen: Point{x:0.0, y:0.0, z:4.0}, r: 4.0, def_color: Point{x: 0.2, y: 0.2, z: 0.6}};     //-- blue sphere, mid cen
+    let s2 = Sphere{cen: Point{x:6.0, y:-2.0, z: 12.0}, r: 4.0, def_color: Point{x: 0.6, y: 0.2, z: 0.2}};    //-- red sphere, back r
+    let s3 = Sphere{cen: Point{x:-6.0, y:-2.0, z:12.0}, r: 4.0, def_color: Point{x: 0.2, y: 0.6, z: 0.2}};   //-- green sphere, front l
+ 
     println!("\n\nRay Operations and Sphere Hit Test...\n-------------------------------------");
     println!("Sphere: {}", s1.stringy());
     println!("\n2x hit ray: {}", r1.stringy());
@@ -90,18 +99,20 @@ fn main() {
     pbar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] [{bar:50.green/cyan}] {msg} {percent}%").progress_chars("=>#"));
     
     //-- light source
-    let bulb = Sphere{cen: Point{x:-5.0, y:6.0, z: -5.0}, r: 1.0, def_color: Point{x: 1.0, y: 1.0, z: 1.0}};
+    let bulb = Sphere{cen: Point{x:-5.0, y:6.0, z: -5.0}, r: 0.1, def_color: Point{x: 1.0, y: 1.0, z: 1.0}};
 
     //-- scene 
     let mut scene: Vec<&Sphere> = Vec::new();
     scene.push(&s1);
     scene.push(&s2);
-    //scene.push(&bulb);
+    scene.push(&s3);
+    scene.push(&bulb);
 
     //-- launch rays
     //- launches left->right | top->bottom by step size (prop to img size)
     //NOTE: not factoring in camera focal length
-    let mut cool_ray = Ray{origin: cam.pos, dir: Vec3{x: -0.5 * cam.w, y: 0.5 * cam.h, z: 1.0}};
+    //let mut cool_ray = Ray{origin: cam.pos, dir: Vec3{x: -0.5 * cam.w, y: 0.5 * cam.h, z: 1.0}};
+    let mut cool_ray = Ray{origin: cam.pos, dir: Vec3{x: -0.5 * cam.w, y: 0.5 * cam.h, z: cam.pos.z + cam.focl}};
     let mut closest_hit: HitInfo = HitInfo{ip: Point::default(), norm: Point::default(), obj: &s1};     //-- dummy init to avoid compile errors  
     for y in 0..img_h {
         for x in 0..img_w {
@@ -116,13 +127,14 @@ fn main() {
                     if first_hit {                      //- if first hit for this ray, init hit ptr
                         first_hit = false;
                         closest_hit = hit_rec;
+                        
                     } else {                            //- if not, determine closer hit to cam and set
                         if (hit_rec.ip - cam.pos).mag() < (closest_hit.ip - cam.pos).mag() {
                             closest_hit = hit_rec;
                         }
                     }
-
-                    color = phong_single_src(&hit_rec, &cam, &bulb);
+                    
+                    color = phong_single_src(&closest_hit, &cam, &bulb);
                     //img_buffer.push(color.r); img_buffer.push(color.g); img_buffer.push(color.b); 
                 }
 
@@ -132,7 +144,7 @@ fn main() {
                    
                 }
             }
-
+            
             //--write color to buffer
             img_buffer.push(color.r); img_buffer.push(color.g); img_buffer.push(color.b);                
             cool_ray.dir.x += step;
@@ -354,7 +366,9 @@ struct Camera{
 } impl Camera{
 
     pub fn new() -> Camera{
-        Camera{ pos: Point{x:0.0, y:0.0, z: -5.0}, focl: 1.0, w: 16.0, h: 9.0 }
+        Camera{ pos: Point{x:0.0, y:0.0, z: -16.0}, focl: 1.0, w: 16.0, h: 9.0 }
+
+        //Camera{ pos: Point{x:0.0, y:0.0, z: -5.0}, focl: 1.0, w: 12.0, h: 6.5 }
     }
 
 } impl Stringable for Camera{
