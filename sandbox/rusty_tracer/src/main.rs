@@ -12,7 +12,7 @@ use std::io::BufWriter;
 use std::vec::Vec;
 use std::convert::TryInto;
 use std::process;
-
+use std::f64::consts::PI;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 
@@ -32,7 +32,7 @@ use indicatif::ProgressStyle;
 
 fn main() {
 
-    println!("\n----------------------------------\n|  Welcome to the rusty tracer!  |\n----------------------------------");
+    println!("\n-----------------------------------------\n|     Welcome to the rusty tracer!     |\n----------------------------------------");
 
     //-- image
     let aspect_ratio: f32 = 16.0 / 9.0;
@@ -49,7 +49,9 @@ fn main() {
     
     let v1 = Vec3{x: 1.5, y: -2.5, z: 0.0};
     let v2 = Vec3{x: 0.5, y: 10.0, z: 2.2};
-    
+    let m1 = Mat3::gen_roty((PI/2048.0));
+    let m2 = Mat3::gen_roty(-(PI/2048.0));
+
     //-- TEST: printing and operator overloads
     println!("\n\nVec3 Operations Test...\n------------------------------------\nx = {}", v1.stringy());
     println!("y = {}", v2.stringy());
@@ -61,30 +63,21 @@ fn main() {
     println!("||x|| = {}", v1.mag());
     println!("\n'no drop' test: x = {}, y = {}", v1.stringy(), v2.stringy());
     
-    //-- TEST: Ray operations and intersection
+    println!("\n\nMat3 Operations Test...\n------------------------------------\n");
+    println!("1/2pi y-rot mat3 = \n{}", m1.stringy()); 
+    println!("^m1 * x = {}", (m1 * v1).stringy());
+
+    //-- scene data init
     let mut r1 = Ray{origin: Point{x:0.0,y:0.0,z:-5.0}, dir: Vec3{x:0.0, y:0.0, z:1.0}};   
-    let s1 = Sphere{cen: Point{x:0.0, y:0.0, z:4.0}, r: 4.0, def_color: Point{x: 0.2, y: 0.2, z: 0.6}};     //-- blue sphere, mid cen
-    let s2 = Sphere{cen: Point{x:6.0, y:-2.0, z: 12.0}, r: 4.0, def_color: Point{x: 0.6, y: 0.2, z: 0.2}};    //-- red sphere, back r
-    let s3 = Sphere{cen: Point{x:-6.0, y:-2.0, z:12.0}, r: 4.0, def_color: Point{x: 0.2, y: 0.6, z: 0.2}};   //-- green sphere, front l
- 
-    println!("\n\nRay Operations and Sphere Hit Test...\n-------------------------------------");
-    println!("Sphere: {}", s1.stringy());
-    println!("\n2x hit ray: {}", r1.stringy());
-    //println!("hit? : {}", s1.hits(&r1));
-
-    r1.origin.x = -2.0;
-    println!("\n1x hit ray: {}", r1.stringy());
-    //println!("Discriminant test: {}", s1.hits(&r1));
-
-    r1.origin.x = -2.1;
-    println!("\nmiss ray: {}", r1.stringy());
-    //println!("Discriminant test: {}", s1.hits(&r1));
-
+    let mut s1: Sphere = Sphere{cen: Point{x:0.0, y:0.0, z:4.0}, r: 4.0, def_color: Point{x: 0.2, y: 0.2, z: 0.6}};     //-- blue sphere, mid cen
+    let mut s2: Sphere = Sphere{cen: Point{x:6.0, y:-2.0, z: 12.0}, r: 4.0, def_color: Point{x: 0.6, y: 0.2, z: 0.2}};    //-- red sphere, back r
+    let mut s3: Sphere = Sphere{cen: Point{x:-6.0, y:-2.0, z:12.0}, r: 4.0, def_color: Point{x: 0.2, y: 0.6, z: 0.2}};   //-- green sphere, front l
+    let mut dummy_s: Sphere = Sphere::default();
+    
     //-- file + png encoder/writer
     let path = Path::new("output/image.png");
     let file = File::create(path).unwrap();
     let ref mut w = BufWriter::new(file);
-
     let mut encoder = png::Encoder::new(w, img_w, img_h);
     encoder.set_color(png::ColorType::RGB);
     encoder.set_depth(png::BitDepth::Eight);
@@ -99,54 +92,49 @@ fn main() {
     pbar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] [{bar:50.green/cyan}] {msg} {percent}%").progress_chars("=>#"));
     
     //-- light source
-    let bulb = Sphere{cen: Point{x:-5.0, y:6.0, z: -5.0}, r: 0.1, def_color: Point{x: 1.0, y: 1.0, z: 1.0}};
+    let mut bulb = Sphere{cen: Point{x:-5.0, y:6.0, z: -5.0}, r: 0.1, def_color: Point{x: 1.0, y: 1.0, z: 1.0}};
 
-    //-- scene 
-    let mut scene: Vec<&Sphere> = Vec::new();
-    scene.push(&s1);
-    scene.push(&s2);
-    scene.push(&s3);
-    scene.push(&bulb);
+    //-- scene: vector of mutable references   
+    let mut scene: Vec<&mut Sphere> = Vec::new();
+    scene.push(&mut s1);
+    scene.push(&mut s2);
+    scene.push(&mut s3);
+    //scene.push(& bulb);                           //NOTE: iss2. remove light from scene objs
 
     //-- launch rays
     //- launches left->right | top->bottom by step size (prop to img size)
-    //NOTE: not factoring in camera focal length
-    //let mut cool_ray = Ray{origin: cam.pos, dir: Vec3{x: -0.5 * cam.w, y: 0.5 * cam.h, z: 1.0}};
     let mut cool_ray = Ray{origin: cam.pos, dir: Vec3{x: -0.5 * cam.w, y: 0.5 * cam.h, z: cam.pos.z + cam.focl}};
-    let mut closest_hit: HitInfo = HitInfo{ip: Point::default(), norm: Point::default(), obj: &s1};     //-- dummy init to avoid compile errors  
     for y in 0..img_h {
         for x in 0..img_w {
             
             let mut first_hit: bool = true;
+            let mut closest_hit: HitInfo = HitInfo{ip: Point::default(), norm: Point::default(), obj: &dummy_s};    //-- dummy init to avoid compile errors  
             let mut color: Color = Color::default();
-
-            for obj in &scene{                          //-- for each object in scene....
-                match obj.hits(&cool_ray) {             //- check for a hit
-                Some(hit_rec) => {
-
-                    if first_hit {                      //- if first hit for this ray, init hit ptr
-                        first_hit = false;
-                        closest_hit = hit_rec;
-                        
-                    } else {                            //- if not, determine closer hit to cam and set
-                        if (hit_rec.ip - cam.pos).mag() < (closest_hit.ip - cam.pos).mag() {
-                            closest_hit = hit_rec;
-                        }
-                    }
                     
-                    color = phong_single_src(&closest_hit, &cam, &bulb);
-                    //img_buffer.push(color.r); img_buffer.push(color.g); img_buffer.push(color.b); 
-                }
-
-                None => {
-                    //img_buffer.push(0); img_buffer.push(0); img_buffer.push(0);
-                }
+            for obj in &mut scene{                                                                                  //-- for each object in scene....
                    
+                match obj.hits(&cool_ray) {                                                                         //-- check for a hit
+                    Some(hit_rec) => {
+
+                        if first_hit {                                                                              //-- if first hit for this ray, init hit ptr
+                            first_hit = false;
+                            closest_hit = hit_rec;
+                        
+                        } else {                                                                                    //-- if not, determine closer hit to cam and set
+                            if (hit_rec.ip - cam.pos).mag() < (closest_hit.ip - cam.pos).mag() {
+                                closest_hit = hit_rec;
+                            }
+                        }
+                    
+                        color = phong_single_src(&closest_hit, &cam, &bulb);                                        //-- calculate color w/ Phong model
+                    }
+                    None => {}
                 }
             }
             
-            //--write color to buffer
-            img_buffer.push(color.r); img_buffer.push(color.g); img_buffer.push(color.b);                
+            //scene[1].cen = m1 * scene[1].cen;     //-- can mutate scene data mid-render for effects                                                       
+            //scene[2].cen = m1 * scene[2].cen;                                                           
+            img_buffer.push(color.r); img_buffer.push(color.g); img_buffer.push(color.b);                           //--write color to buffer
             cool_ray.dir.x += step;
         }
         
@@ -156,13 +144,16 @@ fn main() {
         pbar.inc(1);
     }
 
-    //-- cleanup
+    //-- cleanup progress bar
     pbar.finish();
 
     //-- convert buff and write to png
+    println!("\nRender complete! Writing image...");
     let d: &[u8] = &img_buffer;
     writer.write_image_data(d).unwrap();
 
+    //-- lifetime testing ...
+    //println!("Closest hit lifetime test: {}", closest_hit.ip.stringy());
 }
 
 // <<<<<<<<<<<<<<<<<<<<  HELPER TRAITS, STRUCTS, IMPLS, ETC. >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -188,6 +179,7 @@ fn phong_single_src(hit_rec: &HitInfo, cam: &Camera, light: &Sphere) -> Color{
     let alpha = 100.0;                                  //- "shininess" factor
     
     //-- Phong Light Model --> illumination at point = sum of ambient, diffuse, and specular light
+    //--- for multiple lights, sum diffuse + specular with respect to each light
     let ambient = ka * ia;
     let diffuse = (kd * (lv.dot(n)) * is);
     let specular = (ks * (rv.dot(cv).clamp( 0.0, 1.0).powf(alpha) * is));           //-- NOTE: need to clamp dot product to prevent dual specular
@@ -229,6 +221,10 @@ impl Point{
 
     pub fn new() -> Point{
         Point{ x:0.0, y:0.0, z:0.0}
+    }
+
+    pub fn gen(a: f64, b: f64, c: f64) -> Point{
+        Point{ x: a, y: b, z: c}
     }
 
     fn mag(&self) -> f64{
@@ -279,13 +275,48 @@ impl Point{
     fn neg(self) -> Vec3 {
         Vec3 { x: -&self.x, y: -&self.y, z: -&self.z}
     }
-}
-
-impl ops::Mul<Vec3> for f64{
+} impl ops::Mul<Vec3> for f64{
     type Output = Vec3;
 
     fn mul(self, vec: Vec3) -> Vec3{
         Vec3 { x: self * vec.x, y: self * vec.y, z: self * vec.z}
+    }
+}
+
+//----- 3x3 Matrix
+#[derive(Copy, Clone, Default)]
+struct Mat3{
+    x: Vec3,
+    y: Vec3,
+    z: Vec3
+
+} impl Mat3 {
+    
+    pub fn gen_rotx(theta: f64) -> Mat3 {
+        Mat3{x: Vec3::gen(1.0, 0.0, 0.0),
+             y: Vec3::gen(0.0, theta.cos(), -theta.sin()),
+             z: Vec3::gen(0.0, theta.sin(), theta.cos())
+        }
+    }
+
+    pub fn gen_roty(theta: f64) -> Mat3 {
+        Mat3{x: Vec3::gen(theta.cos(), 0.0, theta.sin()),
+             y: Vec3::gen(0.0, 1.0, 0.0),
+             z: Vec3::gen(-theta.sin(), 0.0, theta.cos())
+        }
+    }
+
+} impl Stringable for Mat3{
+
+    fn stringy(&self) -> String{
+        return String::from(self.x.stringy().to_owned() + "\n" + &self.y.stringy() + "\n" + &self.z.stringy());
+    }
+
+} impl ops::Mul<Vec3> for Mat3{     //-- row major mat3 x vec3...
+    type Output = Vec3;
+
+    fn mul(self, vec: Vec3) -> Vec3{
+        Vec3{x: self.x.dot(vec), y: self.y.dot(vec), z: self.z.dot(vec)}
     }
 }
 
@@ -330,7 +361,7 @@ struct Sphere{
         
         //println!("unit ray: {}", ray.stringy());
 
-        let mut discrim = (2.0 * ray.dir.dot(ray.origin - self.cen)).powf(2.0) - (4.0 * ray.dir.mag().powf(2.0)) * ((ray.origin - self.cen).mag().powf(2.0) - self.r.powf(2.0));
+        let discrim = (2.0 * ray.dir.dot(ray.origin - self.cen)).powf(2.0) - (4.0 * ray.dir.mag().powf(2.0)) * ((ray.origin - self.cen).mag().powf(2.0) - self.r.powf(2.0));
         
         //println!("discriminant: {}", discrim);
         if discrim < 0.01 && discrim > 0.0 {                                            //-- 1x hit handling
