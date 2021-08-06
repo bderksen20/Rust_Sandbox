@@ -13,8 +13,10 @@ use std::vec::Vec;
 use std::convert::TryInto;
 use std::process;
 use std::f64::consts::PI;
+
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
+use colored::*;
 
 //-- TODO For Need!
 //-- 0. Clean up!!! Don't use just one main file.....lol
@@ -32,7 +34,7 @@ use indicatif::ProgressStyle;
 
 fn main() {
 
-    println!("\n-----------------------------------------\n|     Welcome to the rusty tracer!     |\n----------------------------------------");
+    println!("{}{}{}", "\n-----------------------------------------------------------------------\n|".purple(),"                    Welcome to the rusty tracer!                     ".green(),"|\n-----------------------------------------------------------------------\n".purple());
 
     //-- image
     let aspect_ratio: f32 = 16.0 / 9.0;
@@ -53,7 +55,7 @@ fn main() {
     let m2 = Mat3::gen_roty(-(PI/2048.0));
 
     //-- TEST: printing and operator overloads
-    println!("\n\nVec3 Operations Test...\n------------------------------------\nx = {}", v1.stringy());
+    println!("{}{}{}", "\n\nVec3 Operations Test...".green(), "\n-----------------------------------------------------------------------\n".purple(), String::from("x = ") + &v1.stringy());
     println!("y = {}", v2.stringy());
     println!("\n   -x = {}", (-v1).stringy());
     println!("x + y = {}", (v1 + v2).stringy());
@@ -63,7 +65,7 @@ fn main() {
     println!("||x|| = {}", v1.mag());
     println!("\n'no drop' test: x = {}, y = {}", v1.stringy(), v2.stringy());
     
-    println!("\n\nMat3 Operations Test...\n------------------------------------\n");
+    println!("{}{}", "\n\nMat3 Operations Test...\n".green(), "-----------------------------------------------------------------------\n".purple());
     println!("1/2pi y-rot mat3 = \n{}", m1.stringy()); 
     println!("^m1 * x = {}", (m1 * v1).stringy());
 
@@ -76,10 +78,10 @@ fn main() {
     
     //-- light source
     let mut bulb1 = PointLight{pos: Point{x:-12.5,y:10.0,z:-8.0}, id: Point{x:1.0,y:1.0,z:1.0}, is: Point{x:1.0,y:1.0,z:1.0}};
-    let mut bulb2 = PointLight{pos: Point{x:0.0,y:0.0,z:-5.0}, id: Point{x:1.0,y:1.0,z:1.0}, is: Point{x:1.0,y:1.0,z:1.0}};
+    let mut bulb2 = PointLight{pos: Point{x:12.5,y:10.0,z:8.0}, id: Point{x:1.0,y:1.0,z:1.0}, is: Point{x:1.0,y:1.0,z:1.0}};
     let mut lights: Vec<&mut PointLight> = Vec::new();
     lights.push(&mut bulb1);
-    //lights.push(&mut bulb2);
+    lights.push(&mut bulb2);
 
     //-- scene: vector of mutable references   
     let mut scene: Vec<&mut Sphere> = Vec::new();
@@ -109,7 +111,7 @@ fn main() {
         let mut img_buffer: Vec<u8> = Vec::new();
         
         //-- progress bar
-        println!("\n\nRendering frame {} ...", frame.to_string());
+        println!("{}{}", (String::from("\n\nRendering frame: ") + &frame.to_string()).green(), "\n-----------------------------------------------------------------------".purple());
         let pbar = ProgressBar::new(img_h.into());
         pbar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] [{bar:50.green/cyan}] {msg} {percent}%").progress_chars("=>#"));
         

@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 png = "0.16.8"
 indicatif = "0.16.2"
+colored = "2.0.0"
