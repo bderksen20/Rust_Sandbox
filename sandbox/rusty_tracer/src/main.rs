@@ -4,6 +4,13 @@
  *
  */
 
+ mod hittable;
+ mod stringable;
+ mod vmaths;
+ mod camera;
+ mod geometry;
+ mod ray;
+
 use std::ops;
 use std::option;
 use std::path::Path;
@@ -17,6 +24,14 @@ use std::f64::consts::PI;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 use colored::*;
+
+//-- self-contained use
+use ray::{Ray};
+use geometry::{Sphere};                     //TODO: should not need this here as we want a vector of "hittables"
+use camera::{Camera};
+use vmaths::{Point, Vec3, Mat3};
+use stringable::{Stringable};
+use hittable::{Hittable, HitInfo};
 
 //-- TODO For Need!
 //-- 1. "Generalize" object model, eg. put varied "Scene Object" geometry structs into single vec
@@ -250,17 +265,6 @@ struct Material{
     }
 }
 
-//---- Stringable: Implemented by objects to get description
-trait Stringable{
-    fn stringy(&self) -> String;
-}
-
-//---- Hittable: Implemented by any geometry
-trait Hittable{
-    fn hits(&self, ray: &Ray) -> Option<HitInfo>;
-    fn get_pos(&self) -> Point;
-}
-
 //---- Color
 #[derive(Copy, Clone, Default)]
 struct Color{
@@ -269,231 +273,4 @@ struct Color{
     b: u8
 }
 
-//---- Linear Algebra Structs + Functions
-//--- Point/Vec3 Struct + Imp
-#[derive(Copy, Clone, Default)]
-struct Point{
-    x: f64,
-    y: f64,
-    z: f64
-} use Point as Vec3;
-
-impl Point{
-
-    pub fn new() -> Point{
-        Point{ x:0.0, y:0.0, z:0.0}
-    }
-
-    pub fn gen(a: f64, b: f64, c: f64) -> Point{
-        Point{ x: a, y: b, z: c}
-    }
-
-    fn mag(&self) -> f64{
-      (&self.x.powf(2.0) + &self.y.powf(2.0) + &self.z.powf(2.0)).abs().sqrt()
-    }
-
-    fn unit(&self) -> Vec3{
-       *self *  (1.0 / self.mag())
-    }
-
-    fn dot(&self, vec: Vec3) -> f64{
-        (&self.x * &vec.x + &self.y * &vec.y + &self.z * &vec.z)
-    }
-
-    fn cross(&self, vec: Vec3) -> Vec3{
-        Vec3{x: (&self.y * vec.z) - (&self.z * vec.y), y: (&self.x * vec.z) - (&self.z * vec.x) , z: (&self.x * vec.y) - (&self.y * vec.x) }
-    }
-
-} impl Stringable for Point {
-    fn stringy(&self) -> String{
-        return String::from("<".to_owned() + &self.x.to_string() + ", "+ &self.y.to_string() + ", "+ &self.z.to_string() + ">");  
-    }
-
-} impl ops::Add for Vec3 {            //-- Add overload
-    type Output = Vec3;
-
-    fn add(self, vec: Vec3) -> Vec3 {
-        Vec3 { x: &self.x + &vec.x, y: &self.y + &vec.y, z: &self.z + &vec.z }
-    }
-
-} impl ops::Sub for Vec3 {          //-- Sub - overload
-    type Output = Vec3;
-
-    fn sub(self, vec: Vec3) -> Vec3 {
-        Vec3 { x: &self.x - &vec.x, y: &self.y - &vec.y, z: &self.z - &vec.z }
-    }
-
-} impl ops::Mul<f64> for Vec3 {     //-- SCALAR Mult * overload
-    type Output = Vec3;
-
-    fn mul(self, s: f64) -> Vec3 {
-        Vec3 { x: &self.x * s, y: &self.y * s, z: &self.z * s }
-    }
-
-} impl ops::Neg for Vec3 {          //-- Neg -x overload
-    type Output = Vec3;
-
-    fn neg(self) -> Vec3 {
-        Vec3 { x: -&self.x, y: -&self.y, z: -&self.z}
-    }
-} impl ops::Mul<Vec3> for f64{
-    type Output = Vec3;
-
-    fn mul(self, vec: Vec3) -> Vec3{
-        Vec3 { x: self * vec.x, y: self * vec.y, z: self * vec.z}
-    }
-}
-
-//----- 3x3 Matrix
-#[derive(Copy, Clone, Default)]
-struct Mat3{
-    x: Vec3,
-    y: Vec3,
-    z: Vec3
-
-} impl Mat3 {
-    
-    pub fn gen_rotx(theta: f64) -> Mat3 {
-        Mat3{x: Vec3::gen(1.0, 0.0, 0.0),
-             y: Vec3::gen(0.0, theta.cos(), -theta.sin()),
-             z: Vec3::gen(0.0, theta.sin(), theta.cos())
-        }
-    }
-
-    pub fn gen_roty(theta: f64) -> Mat3 {
-        Mat3{x: Vec3::gen(theta.cos(), 0.0, theta.sin()),
-             y: Vec3::gen(0.0, 1.0, 0.0),
-             z: Vec3::gen(-theta.sin(), 0.0, theta.cos())
-        }
-    }
-
-} impl Stringable for Mat3{
-
-    fn stringy(&self) -> String{
-        return String::from(self.x.stringy().to_owned() + "\n" + &self.y.stringy() + "\n" + &self.z.stringy());
-    }
-
-} impl ops::Mul<Vec3> for Mat3{     //-- row major mat3 x vec3...
-    type Output = Vec3;
-
-    fn mul(self, vec: Vec3) -> Vec3{
-        Vec3{x: self.x.dot(vec), y: self.y.dot(vec), z: self.z.dot(vec)}
-    }
-}
-
-//---- Ray: follows formula P(t) = O + td
-#[derive(Copy, Clone)]
-struct Ray{
-    origin: Point,
-    dir: Vec3
-
-} impl Ray{
-
-    pub fn at(&self, t: f64) -> Point{
-        let p = self.origin + ( self.dir * t);
-        return p;
-    }
-
-} impl Stringable for Ray{
-    fn stringy(&self) -> String{
-        return String::from("P(t) = ".to_owned() + &self.origin.stringy() + " + t" + &self.dir.stringy());
-    }
-}
-
-//---- Cube:
-struct Cube{
-    cen: Point,
-    len: f64
-} impl Hittable for Cube{
-    
-    //-- cube X ray intersection
-    //- max{ |x-x0|, |y-y0|, |z-z0|} = a -> where edge length = 2a
-    fn hits(&self, ray: &Ray) -> Option<HitInfo> {
-    
-
-        // cube at <-2, 0, 2> w edge = 2
-        // pt that will be on -> <-3, 0, 2>
-        // max{|x+2|, |y|, |z-2|} = 1
-
-        None
-    }
-
-    fn get_pos(&self) -> Point {
-        self.cen
-    }
-}
-
-//---- Sphere: follows eq (x-h)^2 + (y-i)^2 + (z-j)^2 = R^2
-//-- vector form: ||x - c||^2 = R^2
-#[derive(Default)]
-struct Sphere{
-    cen: Point,
-    r: f64,
-    def_color: Point
-
-} impl Stringable for Sphere{
-
-    fn stringy(&self) -> String{
-        return String::from("center = ".to_owned() + &self.cen.stringy() + ", r = " + &self.r.to_string());
-    }
-
-} impl Hittable for Sphere{     //-- Ray xXx Sphere: ||x - c||^2 = R^2, solve for t where x = P(t) 
-
-    fn hits(&self, r: &Ray) -> Option<HitInfo>{
-        let mut ray = *r;
-        ray.dir = ray.dir.unit();                   //-- NOTE: convert to unit vector for calculation... avoid extra comp?
-        
-        //println!("unit ray: {}", ray.stringy());
-
-        let discrim = (2.0 * ray.dir.dot(ray.origin - self.cen)).powf(2.0) - (4.0 * ray.dir.mag().powf(2.0)) * ((ray.origin - self.cen).mag().powf(2.0) - self.r.powf(2.0));
-        
-        //println!("discriminant: {}", discrim);
-        if discrim < 0.01 && discrim > 0.0 {                                            //-- 1x hit handling
-        
-            let t = -(ray.dir.dot(ray.origin - self.cen)) / ray.dir.mag().powf(2.0);          //- solve for t
-            Some(HitInfo{ip: ray.at(t), norm: ray.at(t) - self.cen, obj: &self})                        //- solve for incident pt + norm
-
-        } else if discrim >= 0.01{                                                      //-- 2x hit handling
-    
-            let t = (-2.0 * (ray.dir.dot(ray.origin - self.cen)) + discrim.sqrt())  / (2.0 * ray.dir.mag().powf(2.0));   //- solve for t (want closer hit)
-            Some(HitInfo{ip: ray.at(t), norm: ray.at(t) - self.cen, obj: &self})                                            //- solve for incident pt + norm
-
-        } else {                //-- miss handling
-            None
-        }
-    }
-
-    fn get_pos(&self) -> Point{
-        self.cen
-    }
-} 
-
-
-//---- Hit Info -----
-#[derive(Copy, Clone)]
-struct HitInfo<'a>{ 
-    ip: Point,
-    norm: Vec3,
-    obj: &'a Sphere
-}
-
-//---- Camera ----
-struct Camera{
-    pos: Point,
-    focl: f64,
-    w: f64,
-    h: f64
-} impl Camera{
-
-    pub fn new() -> Camera{
-        Camera{ pos: Point{x:0.0, y:0.0, z: -16.0}, focl: 1.0, w: 16.0, h: 9.0 }
-
-        //Camera{ pos: Point{x:0.0, y:0.0, z: -5.0}, focl: 1.0, w: 12.0, h: 6.5 }
-    }
-
-} impl Stringable for Camera{
-    fn stringy(&self) -> String{
-        return String::from("position: ".to_owned() + &self.pos.stringy() + ", w = " + &self.w.to_string() + ", h = "+ &self.h.to_string()); 
-    }
-}
 
