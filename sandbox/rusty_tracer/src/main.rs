@@ -19,17 +19,11 @@ use indicatif::ProgressStyle;
 use colored::*;
 
 //-- TODO For Need!
-//-- 0. Clean up!!! Don't use just one main file.....lol
-//-- 1. Implement Display" trait for easier printing? Over / with stringable?
-//-- 2. Image is upside down! Whoops!
-//-- 3. Package Phong light instrinsics inside of light struct
-//-- 4. Add multi-light support
-//-- 5. "Generalize" object model, eg. put varied "Scene Object" geometry structs into single vec
-//-- 6. Upgrade to materials rather than just base color
+//-- 1. "Generalize" object model, eg. put varied "Scene Object" geometry structs into single vec
+//-- 2. Upgrade to materials rather than just base color
 
 //-- TODO For Fun!
 //-- fun1. 3D fractals! fractals out of other geometry???
-//-- fun2. ascii render???
 //-- fun3. path tracer implementation
 
 fn main() {
@@ -235,7 +229,25 @@ struct PointLight{
     pub fn new() -> PointLight{
         PointLight{pos: Point::default(), id: Point{x:1.0,y:1.0,z:1.0}, is: Point{x:1.0,y:1.0,z:1.0}}
     }
+}
 
+//----- Material
+struct Material{
+    desc: String,
+    kd: f64,
+    ks: f64,
+    alpha: f64
+        
+} impl Default for Material{
+    
+    fn default() -> Material{
+        Material{
+            desc: String::from("default"),
+            kd: 0.3,
+            ks: 0.5,
+            alpha: 50.0
+        }
+    }
 }
 
 //---- Stringable: Implemented by objects to get description
@@ -246,6 +258,7 @@ trait Stringable{
 //---- Hittable: Implemented by any geometry
 trait Hittable{
     fn hits(&self, ray: &Ray) -> Option<HitInfo>;
+    fn get_pos(&self) -> Point;
 }
 
 //---- Color
@@ -387,6 +400,29 @@ struct Ray{
     }
 }
 
+//---- Cube:
+struct Cube{
+    cen: Point,
+    len: f64
+} impl Hittable for Cube{
+    
+    //-- cube X ray intersection
+    //- max{ |x-x0|, |y-y0|, |z-z0|} = a -> where edge length = 2a
+    fn hits(&self, ray: &Ray) -> Option<HitInfo> {
+    
+
+        // cube at <-2, 0, 2> w edge = 2
+        // pt that will be on -> <-3, 0, 2>
+        // max{|x+2|, |y|, |z-2|} = 1
+
+        None
+    }
+
+    fn get_pos(&self) -> Point {
+        self.cen
+    }
+}
+
 //---- Sphere: follows eq (x-h)^2 + (y-i)^2 + (z-j)^2 = R^2
 //-- vector form: ||x - c||^2 = R^2
 #[derive(Default)]
@@ -426,7 +462,11 @@ struct Sphere{
             None
         }
     }
-}
+
+    fn get_pos(&self) -> Point{
+        self.cen
+    }
+} 
 
 
 //---- Hit Info -----
