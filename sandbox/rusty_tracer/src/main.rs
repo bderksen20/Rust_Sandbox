@@ -10,6 +10,7 @@
  mod camera;
  mod geometry;
  mod ray;
+ mod material;
 
 use std::ops;
 use std::option;
@@ -27,11 +28,12 @@ use colored::*;
 
 //-- self-contained use
 use ray::{Ray};
-use geometry::{Sphere};                     //TODO: should not need this here as we want a vector of "hittables"
+use geometry::{Sphere, BBox, XYRect, XZRect, YZRect, AABox};                     //TODO: should not need this here as we want a vector of "hittables"
 use camera::{Camera};
 use vmaths::{Point, Vec3, Mat3};
 use stringable::{Stringable};
 use hittable::{Hittable, HitInfo};
+use material::{Material};
 
 //-- TODO For Need!
 //-- 1. "Generalize" object model, eg. put varied "Scene Object" geometry structs into single vec
@@ -78,26 +80,41 @@ fn main() {
     println!("1/2pi y-rot mat3 = \n{}", m1.stringy()); 
     println!("^m1 * x = {}", (m1 * v1).stringy());
 
+    let boxxy: BBox = BBox::gen(Point::gen(0.0, 0.0, -5.0), 1.0, 1.0, 1.0);
+    //println!("Box string text: {}", boxxy.stringy());
+
     //-- scene data init
     let mut r1 = Ray{origin: Point{x:0.0,y:0.0,z:-5.0}, dir: Vec3{x:0.0, y:0.0, z:1.0}};   
     let mut s1: Sphere = Sphere{cen: Point{x:0.0, y:0.0, z:4.0}, r: 4.0, def_color: Point{x: 0.2, y: 0.2, z: 0.6}};     //-- blue sphere, mid cen
     let mut s2: Sphere = Sphere{cen: Point{x:6.0, y:2.0, z: 12.0}, r: 4.0, def_color: Point{x: 0.6, y: 0.2, z: 0.2}};   //-- red sphere, back r
     let mut s3: Sphere = Sphere{cen: Point{x:-6.0, y:2.0, z:12.0}, r: 4.0, def_color: Point{x: 0.2, y: 0.6, z: 0.2}};   //-- green sphere, front l
-    let mut dummy_s: Sphere = Sphere::default();
-    
+    let r_front: XYRect = XYRect::gen(4.0, -2.0, 2.0, -2.0, 2.0);
+    let r_top: XZRect = XZRect::gen(4.0, -4.0, 4.0, -4.0, 4.0);
+    let r_bot: XZRect = XZRect::gen(-4.0, -4.0, 4.0, -4.0, 4.0);
+    let r_left: YZRect = YZRect::gen(-4.0, -4.0, 4.0, -4.0, 4.0);
+    let r_right: YZRect = YZRect::gen(4.0, -4.0, 4.0, -4.0, 4.0);
+    let test_box: AABox = AABox::gen(Point::gen(-4.0, -2.0, -4.0), Point::gen(2.0, 2.0, 2.0));
+
     //-- light source
     let mut bulb1 = PointLight{pos: Point{x:-12.5,y:10.0,z:-8.0}, id: Point{x:1.0,y:1.0,z:1.0}, is: Point{x:1.0,y:1.0,z:1.0}};
     let mut bulb2 = PointLight{pos: Point{x:12.5,y:10.0,z:8.0}, id: Point{x:1.0,y:1.0,z:1.0}, is: Point{x:1.0,y:1.0,z:1.0}};
+    let mut bulb3 = PointLight{pos: Point{x:0.0,y:4.0,z:0.0}, id: Point{x:1.0,y:1.0,z:1.0}, is: Point{x:1.0,y:1.0,z:1.0}};
     let mut lights: Vec<&mut PointLight> = Vec::new();
-    lights.push(&mut bulb1);
-    lights.push(&mut bulb2);
+    //lights.push(&mut bulb1);
+    //lights.push(&mut bulb2);
+    lights.push(&mut bulb3);
 
     //-- scene: vector of mutable references   
-    let mut scene: Vec<&mut Sphere> = Vec::new();
-    scene.push(&mut s1);
-    scene.push(&mut s2);
-    scene.push(&mut s3);
-    //scene.push(& bulb);                           //NOTE: iss2. remove light from scene objs
+    let mut hit_scene: Vec<Box<dyn Hittable>> = Vec::new();
+    //hit_scene.push(Box::new(s1));
+    hit_scene.push(Box::new(s2));
+    //hit_scene.push(Box::new(s3));
+    //hit_scene.push(Box::new(r_front));
+    hit_scene.push(Box::new(r_top));
+    hit_scene.push(Box::new(r_bot));
+    hit_scene.push(Box::new(r_left));
+    hit_scene.push(Box::new(r_right));
+    //hit_scene.push(Box::new(test_box));
 
     //-- frame loop
     let frames = 1;
@@ -106,7 +123,7 @@ fn main() {
         //-- file + png encoder/writer
         let mut pathstr = String::from("output/frame_".to_owned() + &frame.to_string() + ".png");
         if frames == 1{
-            pathstr = String::from("output/image.png");
+            pathstr = String::from("output/AABB_test2.png");
         }
         let path = Path::new(&pathstr);
         let file = File::create(path).unwrap();
@@ -131,11 +148,12 @@ fn main() {
             for x in 0..img_w {
                 
                 let mut first_hit: bool = true;
-                let mut closest_hit: HitInfo = HitInfo{ip: Point::default(), norm: Point::default(), obj: &dummy_s};    //-- dummy init to avoid compile errors  
+                //let mut closest_hit: HitInfo = HitInfo{ip: Point::default(), norm: Point::default(), obj: &dummy_s};    //-- dummy init to avoid compile errors  
+                let mut closest_hit: HitInfo = HitInfo{ip: Point::default(), norm: Point::default()};
                 let mut color: Color = Color::default();
                         
-                for obj in &mut scene{                                                                                  //-- for each object in scene....
-                       
+                //for obj in &mut scene{                                                                                  //-- for each object in scene....
+                for obj in &hit_scene{      
                     match obj.hits(&cool_ray) {                                                                         //-- check for a hit
                         Some(hit_rec) => {
 
@@ -203,7 +221,9 @@ fn phong_single_src(hit_rec: &HitInfo, cam: &Camera, lights: &Vec<&mut PointLigh
     let ambient = ka * ia;
 
     //-- init illumination (ambient light + base object color)
-    let mut illu = ambient + hit_rec.obj.def_color;
+    let temp_color = Point::gen(0.1, 0.1, 0.1);
+    //let mut illu = ambient + hit_rec.obj.def_color;                     //TODO: verify this works......
+    let mut illu = ambient + temp_color;
 
     //-- loop through lights --> calculate diffuse + specular contributions for each
     for light in lights{
@@ -243,25 +263,6 @@ struct PointLight{
     
     pub fn new() -> PointLight{
         PointLight{pos: Point::default(), id: Point{x:1.0,y:1.0,z:1.0}, is: Point{x:1.0,y:1.0,z:1.0}}
-    }
-}
-
-//----- Material
-struct Material{
-    desc: String,
-    kd: f64,
-    ks: f64,
-    alpha: f64
-        
-} impl Default for Material{
-    
-    fn default() -> Material{
-        Material{
-            desc: String::from("default"),
-            kd: 0.3,
-            ks: 0.5,
-            alpha: 50.0
-        }
     }
 }
 
