@@ -13,8 +13,8 @@ use crate::material::{Material};
 pub struct Sphere{
     pub cen: Point,
     pub r: f64,
-    pub def_color: Point
-
+    pub def_color: Point,
+    pub material: Material          //-- TODO: make sure this works
 } impl Stringable for Sphere{
 
     fn stringy(&self) -> String{
@@ -36,13 +36,13 @@ pub struct Sphere{
         
             let t = -(ray.dir.dot(ray.origin - self.cen)) / ray.dir.mag().powf(2.0);          //- solve for t
             //Some(HitInfo{ip: ray.at(t), norm: ray.at(t) - self.cen, obj: &self})                        //- solve for incident pt + norm
-            Some(HitInfo{ip: ray.at(t), norm: ray.at(t) - self.cen})
+            Some(HitInfo{ip: ray.at(t), norm: ray.at(t) - self.cen, hit_mat: &self.material}) //TODO: test
 
         } else if discrim >= 0.01{                                                      //-- 2x hit handling
     
             let t = (-2.0 * (ray.dir.dot(ray.origin - self.cen)) + discrim.sqrt())  / (2.0 * ray.dir.mag().powf(2.0));   //- solve for t (want closer hit)
             //Some(HitInfo{ip: ray.at(t), norm: ray.at(t) - self.cen, obj: &self})                                            //- solve for incident pt + norm
-            Some(HitInfo{ip: ray.at(t), norm: ray.at(t) - self.cen})
+            Some(HitInfo{ip: ray.at(t), norm: ray.at(t) - self.cen, hit_mat: &self.material}) //TODO: test
 
         } else {                //-- miss handling
             None
@@ -63,6 +63,7 @@ pub struct XYRect{
     pub x1: f64,
     pub y0: f64,
     pub y1: f64,
+    pub material: Material          //-- TODO: make sure this works
 } impl XYRect {
 
     // For rects that lie on the z-axis
@@ -72,13 +73,14 @@ pub struct XYRect{
             x0: -0.5*width,
             x1: 0.5*width,
             y0: -0.5*height,
-            y1: 0.5*height
+            y1: 0.5*height,
+            material: Material::default()
         }
     }
 
     // General rect
     pub fn gen(zz: f64, xl: f64, xr: f64, yb: f64, yt: f64) -> XYRect{
-        XYRect{z: zz, x0: xl, x1: xr, y0: yb, y1: yt}
+        XYRect{z: zz, x0: xl, x1: xr, y0: yb, y1: yt, material: Material::default()}
     }
 
 } impl Hittable for XYRect {
@@ -93,9 +95,9 @@ pub struct XYRect{
         //-- hit if within rectangle coordinate bounds 
         if (x <= self.x1 && x >= self.x0) && ( y <= self.y1 && y >= self.y0) {
             if ray.dir.z <= 0.0 && self.z <= 0.0 {      //-- TODO: had to add here to make this correct
-                Some(HitInfo{ip: ray.at(t), norm: Point::gen(0.0, 0.0, 1.0)})
+                Some(HitInfo{ip: ray.at(t), norm: Point::gen(0.0, 0.0, 1.0), hit_mat: &self.material })
             } else {
-                Some(HitInfo{ip: ray.at(t), norm: Point::gen(0.0, 0.0, -1.0)})
+                Some(HitInfo{ip: ray.at(t), norm: Point::gen(0.0, 0.0, -1.0), hit_mat: &self.material }) //TODO: test
             }
             
         } else { None }
@@ -113,6 +115,7 @@ pub struct XZRect{
     pub x1: f64,
     pub z0: f64,
     pub z1: f64,
+    pub material: Material          //-- TODO: make sure this works
 } impl XZRect {
 
     //-- on-axis rects
@@ -122,13 +125,14 @@ pub struct XZRect{
             x0: -0.5*width,
             x1: 0.5*width,
             z0: -0.5*height,
-            z1: 0.5*height
+            z1: 0.5*height,
+            material: Material::default()
         }
     }
 
     //-- general rects
     pub fn gen(yy: f64, xl: f64, xr: f64, zn: f64, zf: f64) -> XZRect{
-        XZRect{y: yy, x0: xl, x1: xr, z0: zn, z1: zf}
+        XZRect{y: yy, x0: xl, x1: xr, z0: zn, z1: zf, material: Material::default()}
     }
 
 } impl Hittable for XZRect {
@@ -143,9 +147,9 @@ pub struct XZRect{
         //-- hit if within rectangle coordinate bounds 
         if (x <= self.x1 && x >= self.x0) && ( z <= self.z1 && z >= self.z0) {
             if ray.dir.y <=0.0{          
-                Some(HitInfo{ip: ray.at(t), norm: Point::gen(0.0, -1.0, 0.0)})    //-- note: currently just doing opposite of ray component for normal..     
+                Some(HitInfo{ip: ray.at(t), norm: Point::gen(0.0, -1.0, 0.0), hit_mat: &self.material })    //-- note: currently just doing opposite of ray component for normal..     
             } else {
-                Some(HitInfo{ip: ray.at(t), norm: Point::gen(0.0, 1.0, 0.0)})      
+                Some(HitInfo{ip: ray.at(t), norm: Point::gen(0.0, 1.0, 0.0), hit_mat: &self.material})      
             }
         } else { None }
     }
@@ -162,6 +166,7 @@ pub struct YZRect{
     pub y1: f64,
     pub z0: f64,
     pub z1: f64,
+    pub material: Material          //-- TODO: make sure this works
 } impl YZRect {
 
     //-- on-axis rects
@@ -171,13 +176,14 @@ pub struct YZRect{
             y0: -0.5*width,
             y1: 0.5*width,
             z0: -0.5*height,
-            z1: 0.5*height
+            z1: 0.5*height,
+            material: Material::default()
         }
     }
 
     //-- general rects
     pub fn gen(xx: f64, yb: f64, yt: f64, zn: f64, zf: f64) -> YZRect{
-        YZRect{x: xx, y0: yb, y1: yt, z0: zn, z1: zf}
+        YZRect{x: xx, y0: yb, y1: yt, z0: zn, z1: zf, material: Material::default()}
     }
 
 } impl Hittable for YZRect {
@@ -192,9 +198,9 @@ pub struct YZRect{
         //-- hit if within rectangle coordinate bounds 
         if (y <= self.y1 && y >= self.y0) && ( z <= self.z1 && z >= self.z0) {
             if ray.dir.x <=0.0 {          
-                Some(HitInfo{ip: ray.at(t), norm: Point::gen(-1.0, 0.0, 0.0)})    //-- note: currently just doing opposite of ray component for normal..     
+                Some(HitInfo{ip: ray.at(t), norm: Point::gen(-1.0, 0.0, 0.0), hit_mat: &self.material})    //-- note: currently just doing opposite of ray component for normal..     
             } else {
-                Some(HitInfo{ip: ray.at(t), norm: Point::gen(1.0, 0.0, 0.0)})      
+                Some(HitInfo{ip: ray.at(t), norm: Point::gen(1.0, 0.0, 0.0), hit_mat: &self.material})      
             }
         } else { None }
     }
@@ -253,7 +259,8 @@ pub struct BBox{
     pub h: f64,
     pub d: f64,
     pub min_extent: Point,
-    pub max_extent: Point
+    pub max_extent: Point,
+    pub material: Material
 } impl BBox{
     
     pub fn gen(pos: Point, width: f64, height: f64, depth: f64) -> BBox{
@@ -261,6 +268,7 @@ pub struct BBox{
             cen: pos, w: width, h: height, d: depth,
             min_extent: Point::gen(pos.x - (0.5*width), pos.y - (0.5*height), pos.z -(0.5*depth)),
             max_extent: Point::gen(pos.x + (0.5*width), pos.y + (0.5*height), pos.z +(0.5*depth)),
+            material: Material::default()
         }
     }
 } impl Hittable for BBox {
@@ -303,7 +311,7 @@ pub struct BBox{
             let mut normal: Vec3 = Vec3::new();
 
             let normal = Point::gen(0.0,0.0,0.0);
-            Some(HitInfo{ ip: hit_pt, norm: normal})
+            Some(HitInfo{ ip: hit_pt, norm: normal, hit_mat: &self.material})
 
         } else { None }
     }

@@ -18,7 +18,39 @@ pub struct Material{
             kd: 0.3,
             ks: 0.5,
             alpha: 50.0,
+            base_color: Point::gen(0.2, 0.2, 0.2)
+        }
+    }
+} impl Material {
+
+    //-- Initializers
+    pub fn shiny_red() -> Material{
+        Material{
+            desc: String::from("default shiny red"),
+            kd: 0.3,
+            ks: 0.5,
+            alpha: 50.0,
+            base_color: Point::gen(0.6, 0.2, 0.2)
+        }
+    }
+
+    pub fn shiny_blue() -> Material{
+        Material{
+            desc: String::from("default shiny blue"),
+            kd: 0.3,
+            ks: 0.5,
+            alpha: 50.0,
             base_color: Point::gen(0.2, 0.2, 0.6)
+        }
+    }
+
+    pub fn shiny_green() -> Material{
+        Material{
+            desc: String::from("default shiny green"),
+            kd: 0.3,
+            ks: 0.5,
+            alpha: 50.0,
+            base_color: Point::gen(0.2, 0.6, 0.2)
         }
     }
 }

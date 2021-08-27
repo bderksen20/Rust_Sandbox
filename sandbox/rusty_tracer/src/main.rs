@@ -28,20 +28,18 @@ use colored::*;
 
 //-- self-contained use
 use ray::{Ray};
-use geometry::{Sphere, BBox, XYRect, XZRect, YZRect, AABox};                     //TODO: should not need this here as we want a vector of "hittables"
+use geometry::{Sphere, BBox, XYRect, XZRect, YZRect, AABox};                     
 use camera::{Camera};
 use vmaths::{Point, Vec3, Mat3};
 use stringable::{Stringable};
 use hittable::{Hittable, HitInfo};
 use material::{Material};
 
-//-- TODO For Need!
-//-- 1. "Generalize" object model, eg. put varied "Scene Object" geometry structs into single vec
-//-- 2. Upgrade to materials rather than just base color
-
-//-- TODO For Fun!
-//-- fun1. 3D fractals! fractals out of other geometry???
-//-- fun3. path tracer implementation
+//-- TODO:
+//-- 1. Fix ray bounces
+//-- 2. Shadows
+//-- 3. Good Cornell box
+//-- 4. Cleanup code + comments
 
 fn main() {
 
@@ -82,23 +80,25 @@ fn main() {
 
     let boxxy: BBox = BBox::gen(Point::gen(0.0, 0.0, -5.0), 1.0, 1.0, 1.0);
     //println!("Box string text: {}", boxxy.stringy());
+    //let test_mat = Material{desc: "shiny blue", kd: , ks: , alpha: , base_color: };
 
     //-- scene data init
     let mut r1 = Ray{origin: Point{x:0.0,y:0.0,z:-5.0}, dir: Vec3{x:0.0, y:0.0, z:1.0}};   
-    let mut s1: Sphere = Sphere{cen: Point{x:0.0, y:0.0, z:4.0}, r: 4.0, def_color: Point{x: 0.2, y: 0.2, z: 0.6}};     //-- blue sphere, mid cen
-    let mut s2: Sphere = Sphere{cen: Point{x:6.0, y:2.0, z: 12.0}, r: 4.0, def_color: Point{x: 0.6, y: 0.2, z: 0.2}};   //-- red sphere, back r
-    let mut s3: Sphere = Sphere{cen: Point{x:-6.0, y:2.0, z:12.0}, r: 4.0, def_color: Point{x: 0.2, y: 0.6, z: 0.2}};   //-- green sphere, front l
+    let mut s1: Sphere = Sphere{cen: Point{x:-2.0, y:1.0, z:0.0}, r: 1.6, def_color: Point{x: 0.2, y: 0.2, z: 0.6}, material: Material::shiny_blue()};     //-- blue sphere, mid cen
+    let mut s2: Sphere = Sphere{cen: Point{x:0.0, y:-1.0, z: -2.0}, r: 1.6, def_color: Point{x: 0.6, y: 0.2, z: 0.2}, material: Material::shiny_red()};   //-- red sphere, back r
+    let mut s3: Sphere = Sphere{cen: Point{x:2.0, y:1.0, z:0.0}, r: 1.6, def_color: Point{x: 0.2, y: 0.6, z: 0.2}, material: Material::shiny_green()};   //-- green sphere, front l
     let r_front: XYRect = XYRect::gen(4.0, -2.0, 2.0, -2.0, 2.0);
-    let r_top: XZRect = XZRect::gen(4.0, -4.0, 4.0, -4.0, 4.0);
-    let r_bot: XZRect = XZRect::gen(-4.0, -4.0, 4.0, -4.0, 4.0);
-    let r_left: YZRect = YZRect::gen(-4.0, -4.0, 4.0, -4.0, 4.0);
-    let r_right: YZRect = YZRect::gen(4.0, -4.0, 4.0, -4.0, 4.0);
+    let r_top: XZRect = XZRect::gen(4.0, -8.0, 8.0, -4.0, 4.0);
+    let r_bot: XZRect = XZRect::gen(-4.0, -8.0, 8.0, -4.0, 4.0);
+    let r_left: YZRect = YZRect::gen(-8.0, -4.0, 4.0, -4.0, 4.0);
+    let r_right: YZRect = YZRect::gen(8.0, -4.0, 4.0, -4.0, 4.0);
+    let r_back: XYRect = XYRect::gen(4.0, -8.0, 8.0, -4.0, 4.0);
     let test_box: AABox = AABox::gen(Point::gen(-4.0, -2.0, -4.0), Point::gen(2.0, 2.0, 2.0));
 
     //-- light source
     let mut bulb1 = PointLight{pos: Point{x:-12.5,y:10.0,z:-8.0}, id: Point{x:1.0,y:1.0,z:1.0}, is: Point{x:1.0,y:1.0,z:1.0}};
     let mut bulb2 = PointLight{pos: Point{x:12.5,y:10.0,z:8.0}, id: Point{x:1.0,y:1.0,z:1.0}, is: Point{x:1.0,y:1.0,z:1.0}};
-    let mut bulb3 = PointLight{pos: Point{x:0.0,y:4.0,z:0.0}, id: Point{x:1.0,y:1.0,z:1.0}, is: Point{x:1.0,y:1.0,z:1.0}};
+    let mut bulb3 = PointLight{pos: Point{x:0.0,y:3.9,z:-1.0}, id: Point{x:1.0,y:1.0,z:1.0}, is: Point{x:1.0,y:1.0,z:1.0}};
     let mut lights: Vec<&mut PointLight> = Vec::new();
     //lights.push(&mut bulb1);
     //lights.push(&mut bulb2);
@@ -106,14 +106,15 @@ fn main() {
 
     //-- scene: vector of mutable references   
     let mut hit_scene: Vec<Box<dyn Hittable>> = Vec::new();
-    //hit_scene.push(Box::new(s1));
+    hit_scene.push(Box::new(s1));
     hit_scene.push(Box::new(s2));
-    //hit_scene.push(Box::new(s3));
+    hit_scene.push(Box::new(s3));
     //hit_scene.push(Box::new(r_front));
     hit_scene.push(Box::new(r_top));
     hit_scene.push(Box::new(r_bot));
     hit_scene.push(Box::new(r_left));
     hit_scene.push(Box::new(r_right));
+    hit_scene.push(Box::new(r_back));
     //hit_scene.push(Box::new(test_box));
 
     //-- frame loop
@@ -123,7 +124,7 @@ fn main() {
         //-- file + png encoder/writer
         let mut pathstr = String::from("output/frame_".to_owned() + &frame.to_string() + ".png");
         if frames == 1{
-            pathstr = String::from("output/AABB_test2.png");
+            pathstr = String::from("output/cbox_sphere.png");
         }
         let path = Path::new(&pathstr);
         let file = File::create(path).unwrap();
@@ -149,7 +150,7 @@ fn main() {
                 
                 let mut first_hit: bool = true;
                 //let mut closest_hit: HitInfo = HitInfo{ip: Point::default(), norm: Point::default(), obj: &dummy_s};    //-- dummy init to avoid compile errors  
-                let mut closest_hit: HitInfo = HitInfo{ip: Point::default(), norm: Point::default()};
+                let mut closest_hit: HitInfo = HitInfo{ip: Point::default(), norm: Point::default(), hit_mat: &Material::default()};
                 let mut color: Color = Color::default();
                         
                 //for obj in &mut scene{                                                                                  //-- for each object in scene....
@@ -167,7 +168,7 @@ fn main() {
                                 }
                             }
                         
-                            color = phong_single_src(&closest_hit, &cam, &lights);                                        //-- calculate color w/ Phong model
+                            color = phong_single_src(&closest_hit, &cam, &lights, &hit_scene);                                        //-- calculate color w/ Phong model
                         }
                         None => {}
                     }
@@ -208,12 +209,17 @@ fn main() {
 //---- Phong Reflection / Shading Model
 //-- Phong Light Model --> illumination at point = sum of ambient, diffuse, and specular light
 //- for multiple lights, sum diffuse + specular with respect to each light
-fn phong_single_src(hit_rec: &HitInfo, cam: &Camera, lights: &Vec<&mut PointLight>) -> Color{
+fn phong_single_src(hit_rec: &HitInfo, cam: &Camera, lights: &Vec<&mut PointLight>, hit_scene: &Vec<Box<dyn Hittable>>) -> Color{
 
     //-- temp/test material light constants
-    let kd = 0.3;
-    let ks = 0.5;
-    let alpha = 50.0;                                  //- "shininess" factor
+    //let kd = 0.3;
+    //let ks = 0.5;
+    //let alpha = 50.0;                                  //- "shininess" factor
+
+    let kd = hit_rec.hit_mat.kd;
+    let ks = hit_rec.hit_mat.ks;
+    let alpha = hit_rec.hit_mat.alpha;                                  //- "shininess" factor
+    let mat_base_color: Point = hit_rec.hit_mat.base_color;
     
     //-- global ambient vals + ambient light calc
     let ia = Point{x:1.0 , y: 1.0, z: 1.0};             //- actually colors, but need to use floats
@@ -221,16 +227,15 @@ fn phong_single_src(hit_rec: &HitInfo, cam: &Camera, lights: &Vec<&mut PointLigh
     let ambient = ka * ia;
 
     //-- init illumination (ambient light + base object color)
-    let temp_color = Point::gen(0.1, 0.1, 0.1);
-    //let mut illu = ambient + hit_rec.obj.def_color;                     //TODO: verify this works......
-    let mut illu = ambient + temp_color;
+    //let temp_color = Point::gen(0.1, 0.1, 0.1);                         //-- TODO: integrate material structures
+    let mut illu = ambient + mat_base_color;
 
     //-- loop through lights --> calculate diffuse + specular contributions for each
     for light in lights{
 
         //-- calculate vectors for Phong model comp
         let n: Vec3 = hit_rec.norm.unit();                  //- normalized normal
-        let lv: Vec3 = (light.pos - hit_rec.ip).unit();     //- hit pt -> light
+        let lv: Vec3 = (light.pos - hit_rec.ip).unit();     //- hit pt -> light                             //--TODO: add shadow calc..... if LV (ray) hits a scene object, return 0 contrib
         let rv: Vec3 = 2.0 * lv.dot(n) * n - lv;            //- perfect light reflection at hit pt
         let cv: Vec3 = (cam.pos - hit_rec.ip).unit();       //- hit pt -> camera "eye"
     
@@ -239,12 +244,23 @@ fn phong_single_src(hit_rec: &HitInfo, cam: &Camera, lights: &Vec<&mut PointLigh
         let is = light.is;
 
         //-- calc diffuse/specular light
-        let diffuse = (kd * (lv.dot(n)) * is);
-        let specular = (ks * (rv.dot(cv).clamp( 0.0, 1.0).powf(alpha) * is));       //-- need to clamp dot product to prevent dual specular
+        let mut diffuse = (kd * (lv.dot(n)) * is);
+        let mut specular = (ks * (rv.dot(cv).clamp( 0.0, 1.0).powf(alpha) * is));       //-- need to clamp dot product to prevent dual specular
 
-        // TODO: debug why phong lighting on z-axis is inverse, eg. light at -10 does not shine on
-        // front of sphere as it should
-        
+        //TODO: TEST OF SHADOW GENERATION
+        let lv_ray = Ray{origin: hit_rec.ip, dir: light.pos};                //-- throw out hits that are beyond the light?
+        for obj in hit_scene{      
+            match obj.hits(&lv_ray) {                                                                         //-- check for a hit
+                Some(hit_record) => {
+                    //-- if mag of hit vec is greater than mag of light, throw out...
+                    //if (light.pos - hit_rec.ip).mag() < (hit_record.ip - hit_rec.ip).mag(){
+                        //diffuse = Point::gen(0.0,0.0,0.0);
+                        //specular = Point::gen(0.0,0.0,0.0);
+                    //} 
+                }
+                None => {}
+            }
+        }
 
         illu = illu + diffuse + specular;                                                 //-- sum lights + base color of hit object
     }
