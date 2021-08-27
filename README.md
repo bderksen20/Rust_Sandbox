@@ -6,4 +6,4 @@ repo for Rust learning, examples, projects, and practice
 *a rust-based ray tracer implemented (mostly) from scratch by... me!*
 
 - current iteration preview: ray-traced sphere with Phong illumination model
-![Phong Illumination Model](./sandbox/rusty_tracer/output/image.png)
+![Phong Illumination Model](./sandbox/rusty_tracer/output/cbox_sphere.png)
