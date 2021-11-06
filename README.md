@@ -7,3 +7,5 @@ repo for Rust learning, examples, projects, and practice
 
 - current iteration preview: ray-traced sphere with Phong illumination model
 ![Phong Illumination Model](./sandbox/rusty_tracer/output/cbox_sphere.png)
+
+- todo: ray-triangle, BVH, fix ray bounces, add more materials
